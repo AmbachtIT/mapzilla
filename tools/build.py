@@ -60,8 +60,10 @@ CUSTOM_NODES = {
     "river": {
         # "seed" is not declared in the .node.lua: every scripted node gets one
         # unless it says withSeed = false.
-        "inputs": {"boundsMin", "boundsMax", "seed"},
-        "params": {"seed"},
+        "inputs": {"boundsMin", "boundsMax", "amount", "lakes", "seed"},
+        # "amount" and "lakes" are optional in the .node.lua. Stock gives an
+        # optional input both a wire and a param of the same name, so we do too.
+        "params": {"amount", "lakes", "seed"},
         "outputs": {"points", "widths", "depthsTangent", "tangents", "widthTangents",
                     "layoutVertices", "layoutTexCoords"},
     },
@@ -423,12 +425,21 @@ def splice_river(layer_type):
         if stock["layerType"] != "gui/node_editor/river_points.node":
             raise SystemExit("river_map is no longer fed by river_points.node")
 
+        # The stock Rivers slider, already remapped to (0, 1] for the stock
+        # node. Ours reads it as how densely tributaries join.
+        amount = stock["inputs"]["riverAmountFactor"]
+        # The stock Lakes slider, raw 0..1 ("oceans" is its key in temperate).
+        # Ours reads it as how many lakes lie along the rivers.
+        lakes = (tree.need("Ocean Amount", "param_number"), "out")
+
         name = PREFIX + "river_data"
         tree.add(node(name, layer_type,
                       inputs={"boundsMin": stock["inputs"]["boundsMin"],
                               "boundsMax": stock["inputs"]["boundsMax"],
+                              "amount": amount,
+                              "lakes": lakes,
                               "seed": stock["inputs"]["seed"]},
-                      params={"seed": 0}))
+                      params={"amount": 0.5, "lakes": 0.5, "seed": 0}))
         for key in RIVER_MAP_INPUTS:
             tree.rewire(river["name"], key, stock_points, name)
     return splice
@@ -446,9 +457,18 @@ def splice_river(layer_type):
 #   sea        where u (plus a wobble) passes the coast, the map is declared
 #              lake. Stock already knows what a lake is: it becomes biome 0,
 #              -100m deep, with a soft shore and the right ground textures.
-#   mountains  the stock selector that sorts land into plains / hills /
-#              highland is tilted by u, so the high zones gather at the source
-#              end and the plains at the coast.
+#   relief     the stock selector that sorts land into plains / hills /
+#              highland is replaced by a profile along u, so the land steps
+#              down from highland at the source, through a zone of rolling
+#              hills, to flat plains at the coast. The stock noise keeps a
+#              say, so the zones have ragged, interlocking edges.
+#   valleys    stock pulls the land down to every river in proportion to its
+#              height. We keep that but reshape the fall: a flat floor along
+#              every river in the highland, a long gentle slope in the hills.
+#   shores     the same for lakes and the sea, which stock stamps through the
+#              finished land: ours come down to the water the way they come
+#              down to a river, so a lake lies in a basin.
+#   islands    noise peaks out at sea are left as land, and lifted into hills.
 
 LAYOUT_MARGIN = 0.1     # must match LAYOUT_MARGIN in content/mapzilla/nodes.script.lua
 GRADIENT_TEX = "mapzilla_1::/mapzilla/tex/gradient.tga"
@@ -460,10 +480,101 @@ RIVER_TO_SEA = {
     # about one swing per 3km, so it is not a ruled line.
     "coast_wobble": 0.05,
     "coast_frequency": 0.0003,
-    # How far the land selector (0..1, higher = higher ground) is pushed up at
-    # the source end and down at the sea end.
-    "tilt_source": 0.45,
-    "tilt_sea": -0.35,
+    # The land selector runs 0..1, higher meaning higher ground. At the default
+    # Mountains setting stock reads it as: below 0.56 plains (0-4m), to 0.75
+    # rolling hills (5-120m), to 0.83 upland (80-140m), above that highland
+    # (100-160m, plus alpine stamps). Ours is a profile along u - three level
+    # stretches with short slopes between them - so each kind of land gets a
+    # zone of its own:
+    #     u 0.00-0.24   0.86   highland, with upland where the noise dips
+    #     u 0.34-0.58   0.66   rolling hills
+    #     u 0.68-1.00   0.25   plains, down to the coast
+    # A plain ramp was tried first. It crosses the narrow 0.56-0.75 window
+    # quickly, so the hills were a thin band nobody noticed.
+    "profile": [[0, 0.86], [0.24, 0.86], [0.34, 0.66], [0.58, 0.66], [0.68, 0.25], [1, 0.25]],
+    # The stock selector noise moves the result by this much either way, which
+    # is what makes the zone edges ragged. Kept under half the width of the
+    # hills window so the hill zone stays hills.
+    "noise_swing": 0.08,
+
+    # How the land falls to a river, in units of the stock river-distance map
+    # (not metres - stock stretches distance by roughly 2.6 and adds noise).
+    # Stock multiplies each zone's height by a ramp that is 0 at the river and
+    # 1 a set distance away: 500 for the hills, 1500 for upland and highland.
+    #
+    # Highland: the ramp starts only at the edge of a valley floor, so every
+    # river in the mountains runs along a strip of flat ground - the buildable
+    # land there. The climb beyond it is as steep as stock's.
+    #
+    # The floor's width is itself a map: a slow noise, one swing every 3km or
+    # so, read through the curve below (noise value -> width). This one is a
+    # straight line from no floor to 1140 across the range two octaves of
+    # noise really cover, so along a river the valley narrows to a gorge and
+    # widens to a basin by turns. A curve that kept most valleys shut and
+    # opened a few into much bigger basins (up to 2600) was tried and looked
+    # worse in the game; this is the shape that looked right.
+    "valley_floor_frequency": 0.00035,
+    "valley_floor_curve": [[-1, 0], [-0.55, 0], [0.55, 1140], [1, 1140]],
+    # A valley floor, or any ground we flatten, is the land multiplied down to
+    # nothing: height 0. The water level is 0 too. So the "flat land" in the
+    # mountains was a film a centimetre above the water - it looks like land,
+    # and no town will go on it. Stock plains are 0-4m up. All land is
+    # therefore raised by this much, except within reach of water, where it
+    # eases down to the bank: over bank_river (stock river-distance units)
+    # beside a river, over bank_shore (metres) beside a lake or the sea.
+    "ground_lift": 4,
+    "bank_river": [60, 420],
+    "bank_shore": [0, 140],
+    "valley_climb": 1500,
+    # Hills: stock's 500 puts a 60m bluff beside every river. A longer, later
+    # ramp lets the hills roll down to the water instead.
+    "hill_floor": 150,
+    "hill_climb": 1700,
+
+    # How the land falls to a lake or the sea, in metres from the water's
+    # edge. Stock has nothing here: a lake is stamped through whatever is
+    # there, and the ground only starts to drop inside the lake's outline - so
+    # a lake in the mountains is a hole with 150m of hillside falling into it
+    # in under a hundred metres. Ours treats still water the way stock treats
+    # rivers: the land is multiplied by a ramp of distance to the shore, so a
+    # lake sits in a basin the mountains and hills come down to. Each has a
+    # short level shore first, then the climb.
+    "shore_high_flat": 60,
+    "shore_high_climb": 900,
+    "shore_hill_flat": 20,
+    "shore_hill_climb": 650,
+
+    # Lakes. Most now lie on the rivers and are the river node's doing. The
+    # stock ones - outlines stamped at random over the whole map - are kept
+    # only as the odd isolated lake in the lowlands: their centres must fall
+    # in this stretch of u (1 = allowed), which is the lower hills and the
+    # plains short of the coast, and clear of any river by lake_river_clearance
+    # (stock river-distance units). Stock tries a handful of positions per
+    # map; with most of the map ruled out, few survive.
+    "lake_zone": [[0, 0], [0.50, 0], [0.53, 1], [0.70, 1], [0.73, 0], [1, 0]],
+    "lake_river_clearance": 1500,
+    # Stock stamps its lake atlas 6000m wide, which suits a lake that is the
+    # main feature of its region. An incidental one wants to be smaller.
+    "lake_size": 3200,
+
+    # Islands: patches of the sea that stay land. They are the high spots of a
+    # noise of about one swing per 1.7km, wherever it passes island_threshold
+    # (the noise runs roughly -1..1, so a higher threshold means fewer and
+    # smaller islands), and only from island_offshore past the coast, in u -
+    # nearer in, the same patch would just be a bump in the coastline. Inside
+    # an island the land selector is raised by island_lift, from plains into
+    # the hills band, or every island would be a flat shoal.
+    "island_frequency": 0.0006,
+    "island_threshold": 0.30,
+    "island_offshore": 0.035,
+    "island_lift": 0.40,
+    # Not every island is lifted. A second, slower noise - one swing per 3km
+    # or so, slower than the islands are big, so it rarely changes within one
+    # - decides: where it is above island_hilly_above the island is hills,
+    # elsewhere it stays as flat as the coastal plain. 0 splits them about
+    # evenly; raise it for more flat islands.
+    "island_kind_frequency": 0.0003,
+    "island_hilly_above": 0.0,
 }
 
 
@@ -474,10 +585,30 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
     seed = tree.need("Data", "input_data")
     lakes = tree.need("Sea Rasterization", "rasterizer_map")
     selector = tree.need("New Normalize maps #13", "normalize_map")
+    river_dist = tree.need("New Add maps #329", "add_map")
+    hill_cut = tree.need("river_cut_02", "map_clamp_map")
+    lake_quads = tree.need("Sea quad generator", RANDOM_QUADS)
+    target, target_input, land = tree.land()
+    biome_map = tree.need("New Remap Map #59", "map_clamp_map")
+    biomes_out = tree.need("Biomes Output", "output_biomes")
+    mountains_out = tree.need("mountains layer export", "output_biomes")
+    mountains_raw = tree.need("mountain height", "map_clamp_map")
+    mountains_cut = tree.need("mountains without river", "mul_map")
+    lake_anywhere = tree.need("New Constant map #316", "constant_map")
+    lake_sizes = tree.need("Atlas scales #0", "constant_pointcloud")
+    high_cuts = [tree.need(n, "map_clamp_map")
+                 for n in ("river_cut_03", "river cut 04", "river cut 04 #0")]
 
     name = {key: PREFIX + key for key in (
         "u_raster", "u", "coast_noise", "coast_wobble", "u_coast", "sea", "water",
-        "tilt", "selector_tilted", "selector")}
+        "profile_steps", "profile", "selector_noise", "selector_raw", "selector",
+        "floor_noise", "floor_neg", "valley_dist", "valley_river", "hill_river",
+        "dry_land", "shore_dist", "shore_high", "shore_hill", "valley", "hill_valley",
+        "lake_zone_steps", "lake_zone", "lake_clear", "lake_allowed", "lake_blocked",
+        "lake_sizes", "floor_steps", "island_noise", "island_raw", "island_gate",
+        "island", "not_island", "open_sea", "island_lift", "selector_lifted",
+        "biome_cap", "biomes", "bank_river", "bank_shore", "bank", "ground", "land",
+        "island_kind_noise", "island_hilly", "island_hills")}
 
     def ref(key):
         return (name[key], "out")
@@ -494,6 +625,21 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
                   LAYOUT_MARGIN / (1 + 2 * LAYOUT_MARGIN),
                   (1 + LAYOUT_MARGIN) / (1 + 2 * LAYOUT_MARGIN), 0, 1),
 
+        # Where a stock lake may be stamped: the lowland stretch, away from
+        # rivers. random_quads keeps a quad whose centre reads 0, so the mask
+        # is inverted at the end. The atlas is 4x4, one size per tile.
+        node(name["lake_zone_steps"], "constant_pointcloud",
+             params={"values": cfg["lake_zone"]}),
+        node(name["lake_zone"], "pwlerp_map",
+             inputs={"in1": ref("u"), "steps": ref("lake_zone_steps")}),
+        remap_map(name["lake_clear"], (river_dist, "out"), cfg["lake_river_clearance"],
+                  cfg["lake_river_clearance"] + 100, 0, 1),
+        node(name["lake_allowed"], "mul_map",
+             inputs={"in1": ref("lake_zone"), "in2": ref("lake_clear")}),
+        remap_map(name["lake_blocked"], ref("lake_allowed"), 0, 1, 1, 0),
+        node(name["lake_sizes"], "constant_pointcloud",
+             params={"values": [[cfg["lake_size"], 0]] * 16}),
+
         # The sea: everything past a wobbly coastline, merged into the stock
         # lake map so every stock consumer treats it as water.
         node(name["coast_noise"], "fractal_noise_map",
@@ -505,16 +651,113 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
         node(name["u_coast"], "add_map",
              inputs={"in1": ref("u"), "in2": ref("coast_wobble")}),
         remap_map(name["sea"], ref("u_coast"), cfg["coast"], cfg["coast"] + 0.005, 0, 1),
+
+        # Islands: noise peaks, counted only well out to sea, taken back out
+        # of the sea mask.
+        node(name["island_noise"], "fractal_noise_map",
+             inputs={"seed": (seed, "seed")},
+             params={"frequency": cfg["island_frequency"], "gain": 0.5,
+                     "lacunarity": 2.0, "numOctaves": 3}),
+        remap_map(name["island_raw"], ref("island_noise"),
+                  cfg["island_threshold"], cfg["island_threshold"] + 0.04, 0, 1),
+        remap_map(name["island_gate"], ref("u_coast"),
+                  cfg["coast"] + cfg["island_offshore"],
+                  cfg["coast"] + cfg["island_offshore"] + 0.02, 0, 1),
+        node(name["island"], "mul_map",
+             inputs={"in1": ref("island_raw"), "in2": ref("island_gate")}),
+        remap_map(name["not_island"], ref("island"), 0, 1, 1, 0),
+        node(name["open_sea"], "mul_map",
+             inputs={"in1": ref("sea"), "in2": ref("not_island")}),
+
         node(name["water"], "compare_map",
-             inputs={"in1": (lakes, "out"), "in2": ref("sea")},
+             inputs={"in1": (lakes, "out"), "in2": ref("open_sea")},
              params={"op": "MAX"}),
 
-        # The mountains: tilt the land selector along u.
-        remap_map(name["tilt"], ref("u"), 0, 1,
-                  cfg["tilt_source"], cfg["tilt_sea"], clamp=False),
-        node(name["selector_tilted"], "add_map",
-             inputs={"in1": (selector, "out"), "in2": ref("tilt")}),
-        remap_map(name["selector"], ref("selector_tilted"), 0, 1, 0, 1),
+        # The relief: a profile along u, roughened by the stock selector noise.
+        node(name["profile_steps"], "constant_pointcloud",
+             params={"values": cfg["profile"]}),
+        node(name["profile"], "pwlerp_map",
+             inputs={"in1": ref("u"), "steps": ref("profile_steps")}),
+        remap_map(name["selector_noise"], (selector, "out"), 0, 1,
+                  -cfg["noise_swing"], cfg["noise_swing"]),
+        node(name["selector_raw"], "add_map",
+             inputs={"in1": ref("profile"), "in2": ref("selector_noise")}),
+        node(name["island_kind_noise"], "fractal_noise_map",
+             inputs={"seed": (seed, "seed")},
+             params={"frequency": cfg["island_kind_frequency"], "gain": 0.5,
+                     "lacunarity": 2.0, "numOctaves": 2}),
+        remap_map(name["island_hilly"], ref("island_kind_noise"),
+                  cfg["island_hilly_above"] - 0.04, cfg["island_hilly_above"] + 0.04, 0, 1),
+        node(name["island_hills"], "mul_map",
+             inputs={"in1": ref("island"), "in2": ref("island_hilly")}),
+        remap_map(name["island_lift"], ref("island_hills"), 0, 1, 0, cfg["island_lift"]),
+        node(name["selector_lifted"], "add_map",
+             inputs={"in1": ref("selector_raw"), "in2": ref("island_lift")}),
+        remap_map(name["selector"], ref("selector_lifted"), 0, 1, 0, 1),
+
+        # The valleys: our own ramps of distance to the nearest river, in
+        # place of the stock ones.
+        # The highland one is clamp((distance - floor) / climb) with a floor
+        # that varies from place to place. There is no subtract node, so the
+        # floor is made negative as it is scaled and then added.
+        node(name["floor_noise"], "fractal_noise_map",
+             inputs={"seed": (seed, "seed")},
+             params={"frequency": cfg["valley_floor_frequency"], "gain": 0.5,
+                     "lacunarity": 2.0, "numOctaves": 2}),
+        node(name["floor_steps"], "constant_pointcloud",
+             params={"values": [[x, -w] for x, w in cfg["valley_floor_curve"]]}),
+        node(name["floor_neg"], "pwlerp_map",
+             inputs={"in1": ref("floor_noise"), "steps": ref("floor_steps")}),
+        node(name["valley_dist"], "add_map",
+             inputs={"in1": (river_dist, "out"), "in2": ref("floor_neg")}),
+        remap_map(name["valley_river"], ref("valley_dist"), 0, cfg["valley_climb"], 0, 1),
+        remap_map(name["hill_river"], (river_dist, "out"), cfg["hill_floor"],
+                  cfg["hill_floor"] + cfg["hill_climb"], 0, 1),
+
+        # The shores: the same again for still water. distance_map gives, for
+        # every pixel above its threshold, the distance to the nearest one at
+        # or below it - so it wants a map that is 0 on water and 1 on land.
+        # The lake atlas fades out at its edges; anything it touches at all
+        # counts as water, so the distance is measured from the outline.
+        remap_map(name["dry_land"], ref("water"), 0, 0.02, 1, 0),
+        node(name["shore_dist"], "distance_map",
+             inputs={"in1": ref("dry_land")}, params={"threshold": 0}),
+        remap_map(name["shore_high"], ref("shore_dist"), cfg["shore_high_flat"],
+                  cfg["shore_high_flat"] + cfg["shore_high_climb"], 0, 1),
+        remap_map(name["shore_hill"], ref("shore_dist"), cfg["shore_hill_flat"],
+                  cfg["shore_hill_flat"] + cfg["shore_hill_climb"], 0, 1),
+
+        # Land is as high as both allow: low near a river, low near a shore.
+        node(name["valley"], "mul_map",
+             inputs={"in1": ref("valley_river"), "in2": ref("shore_high")}),
+        node(name["hill_valley"], "mul_map",
+             inputs={"in1": ref("hill_river"), "in2": ref("shore_hill")}),
+
+        # Dry ground: lift all land clear of the water level, easing down to
+        # the banks. Added on the land side, before the river is carved.
+        remap_map(name["bank_river"], (river_dist, "out"),
+                  cfg["bank_river"][0], cfg["bank_river"][1], 0, 1),
+        remap_map(name["bank_shore"], ref("shore_dist"),
+                  cfg["bank_shore"][0], cfg["bank_shore"][1], 0, 1),
+        node(name["bank"], "mul_map",
+             inputs={"in1": ref("bank_river"), "in2": ref("bank_shore")}),
+        remap_map(name["ground"], ref("bank"), 0, 1, 0, cfg["ground_lift"]),
+        node(name["land"], "add_map",
+             inputs={"in1": (land, "out"), "in2": ref("ground")}),
+
+        # What the tree tells the rest of the game about the land. Stock
+        # labels by zone alone, so a valley floor in the highland is still
+        # reported as biome 3 or 4 and, under an alpine stamp, as "mountains"
+        # - although we have flattened it. No towns appeared on those floors,
+        # and the town placer is native code we cannot read, so the labels
+        # are made to tell the truth: where the highland has been pulled all
+        # the way down, the biome map says plains (biome 1 is 1.2 on its 0..4
+        # scale) and the mountains layer, rewired below, is the stamp as cut
+        # by the valleys rather than as stamped.
+        remap_map(name["biome_cap"], ref("valley"), 0, 0.05, 1.2, 4),
+        node(name["biomes"], "compare_map",
+             inputs={"in1": (biome_map, "out"), "in2": ref("biome_cap")},
+             params={"op": "MIN"}),
     ):
         tree.add(block)
 
@@ -522,6 +765,16 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
         tree.rewire(consumer, input_name, lakes, name["water"])
     for consumer, input_name in tree.consumers(selector):
         tree.rewire(consumer, input_name, selector, name["selector"])
+    tree.rewire(target, target_input, land, name["land"])
+    tree.rewire(biomes_out, "output", biome_map, name["biomes"])
+    tree.rewire(mountains_out, "output", mountains_raw, mountains_cut)
+    tree.rewire(lake_quads, "mask", lake_anywhere, name["lake_blocked"])
+    tree.rewire(lake_quads, "sizeAndScale", lake_sizes, name["lake_sizes"])
+    for consumer, input_name in tree.consumers(hill_cut):
+        tree.rewire(consumer, input_name, hill_cut, name["hill_valley"])
+    for cut in high_cuts:
+        for consumer, input_name in tree.consumers(cut):
+            tree.rewire(consumer, input_name, cut, name["valley"])
 
 
 def write_gradient(path, width=256, height=8):
@@ -622,9 +875,11 @@ def validate(text, knowledge):
                 problems.append("%s (%s): param(s) %s never used in stock"
                                 % (n["name"], kind, sorted(extra)))
 
-    # Our nodes must actually reach the height output, or the splice is inert.
+    # Our nodes must actually reach something the tree outputs - the height
+    # map, or the biome and layer maps - or the splice is inert.
     reach = set()
-    stack = [n["name"] for n in nodes if n["layerType"] == "height_map_output"]
+    stack = [n["name"] for n in nodes
+             if n["layerType"] in ("height_map_output", "output_biomes")]
     while stack:
         current = stack.pop()
         if current in reach or current not in by_name:
@@ -633,7 +888,7 @@ def validate(text, knowledge):
         stack.extend(src for src, _ in by_name[current]["inputs"].values())
     for n in nodes:
         if n["name"].startswith(PREFIX) and n["name"] not in reach:
-            problems.append("%s does not feed the height output" % n["name"])
+            problems.append("%s does not feed any output" % n["name"])
 
     return problems + ["odd literal - " + b for b in check_literals(text)]
 
@@ -667,7 +922,12 @@ def build_gen(stock, climate, tree_res, label, what):
     found = {}
 
     def rename(match):
-        found["display"] = "%s + %s" % (match.group(2), label)
+        # A label starting with "=" is the whole name; any other is appended
+        # to the climate's, as in "Temperate + Mesas".
+        if label.startswith("="):
+            found["display"] = label[1:]
+        else:
+            found["display"] = "%s + %s" % (match.group(2), label)
         return match.group(1) + found["display"] + match.group(3)
 
     text, count = re.subn(r'(desc = \{.*?name = _\(")([^"]+)("\))', rename, text,
@@ -696,7 +956,9 @@ RIVER_NODE = "mapzilla/river.node"
 # remove: pick another generator in the dialog first.
 GENERATORS = (
     # (file base, stock climate, splice, label, description for the header)
-    ("mapzilla_temperate_river_sea", "temperate", splice_river_to_sea, "River to sea",
+    # Shown as "Mountains to delta". The file base keeps its first name: it
+    # is what settings.lua remembers, so it cannot follow the display name.
+    ("mapzilla_temperate_river_sea", "temperate", splice_river_to_sea, "=Mountains to delta",
      "one river laid out by our scripted node, mountains at its source and a sea at its mouth"),
     ("mapzilla_river_a", "temperate", splice_river(RIVER_NODE), "River probe",
      "the river layout taken from our scripted node"),

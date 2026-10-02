@@ -181,6 +181,10 @@ Otherwise no asset is placed.]],
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
 				inputs = { 
+					amount = { 
+						key = "output",
+						nodeName = "River amount range",
+					},
 					boundsMax = { 
 						key = "mapBoundsMax",
 						nodeName = "data_gen Copy",
@@ -188,6 +192,10 @@ Otherwise no asset is placed.]],
 					boundsMin = { 
 						key = "mapBoundsMin",
 						nodeName = "data_gen Copy",
+					},
+					lakes = { 
+						key = "out",
+						nodeName = "Ocean Amount",
 					},
 					seed = { 
 						key = "seed",
@@ -197,6 +205,8 @@ Otherwise no asset is placed.]],
 				layerType = "mapzilla/river.node",
 				name = "mz_river_data",
 				params = { 
+					amount = 0.5,
+					lakes = 0.5,
 					seed = 0,
 				},
 				position = { -0.488, -0.06, },
@@ -244,6 +254,122 @@ Otherwise no asset is placed.]],
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { },
+				layerType = "constant_pointcloud",
+				name = "mz_lake_zone_steps",
+				params = { 
+					values = {
+						{ 0, 0, },
+						{ 0.5, 0, },
+						{ 0.53, 1, },
+						{ 0.7, 1, },
+						{ 0.73, 0, },
+						{ 1, 0, },
+					},
+				},
+				position = { -0.452, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_u",
+					},
+					steps = { 
+						key = "out",
+						nodeName = "mz_lake_zone_steps",
+					},
+				},
+				layerType = "pwlerp_map",
+				name = "mz_lake_zone",
+				params = { },
+				position = { -0.44, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "New Add maps #329",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_lake_clear",
+				params = { 
+					clamp = true,
+					from_x = 1500,
+					from_y = 1600,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.428, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_lake_zone",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_lake_clear",
+					},
+				},
+				layerType = "mul_map",
+				name = "mz_lake_allowed",
+				params = { },
+				position = { -0.416, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_lake_allowed",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_lake_blocked",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 1,
+					to_x = 1,
+					to_y = 0,
+				},
+				position = { -0.404, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { },
+				layerType = "constant_pointcloud",
+				name = "mz_lake_sizes",
+				params = { 
+					values = {
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+						{ 3200, 0, },
+					},
+				},
+				position = { -0.392, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
 				inputs = { 
 					seed = { 
 						key = "seed",
@@ -258,7 +384,7 @@ Otherwise no asset is placed.]],
 					lacunarity = 2.0,
 					numOctaves = 4,
 				},
-				position = { -0.452, -0.06, },
+				position = { -0.38, -0.06, },
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
@@ -277,7 +403,7 @@ Otherwise no asset is placed.]],
 					to_x = -0.05,
 					to_y = 0.05,
 				},
-				position = { -0.44, -0.06, },
+				position = { -0.368, -0.06, },
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
@@ -294,7 +420,7 @@ Otherwise no asset is placed.]],
 				layerType = "add_map",
 				name = "mz_u_coast",
 				params = { },
-				position = { -0.428, -0.06, },
+				position = { -0.356, -0.06, },
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
@@ -313,7 +439,116 @@ Otherwise no asset is placed.]],
 					to_x = 0,
 					to_y = 1,
 				},
-				position = { -0.416, -0.06, },
+				position = { -0.344, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					seed = { 
+						key = "seed",
+						nodeName = "Data",
+					},
+				},
+				layerType = "fractal_noise_map",
+				name = "mz_island_noise",
+				params = { 
+					frequency = 0.0006,
+					gain = 0.5,
+					lacunarity = 2.0,
+					numOctaves = 3,
+				},
+				position = { -0.332, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_island_noise",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_island_raw",
+				params = { 
+					clamp = true,
+					from_x = 0.3,
+					from_y = 0.33999999999999997,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.32, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_u_coast",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_island_gate",
+				params = { 
+					clamp = true,
+					from_x = 0.8350000000000001,
+					from_y = 0.8550000000000001,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.308, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_island_raw",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_island_gate",
+					},
+				},
+				layerType = "mul_map",
+				name = "mz_island",
+				params = { },
+				position = { -0.296, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_island",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_not_island",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 1,
+					to_x = 1,
+					to_y = 0,
+				},
+				position = { -0.284, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_sea",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_not_island",
+					},
+				},
+				layerType = "mul_map",
+				name = "mz_open_sea",
+				params = { },
+				position = { -0.272, -0.06, },
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
@@ -324,7 +559,7 @@ Otherwise no asset is placed.]],
 					},
 					in2 = { 
 						key = "out",
-						nodeName = "mz_sea",
+						nodeName = "mz_open_sea",
 					},
 				},
 				layerType = "compare_map",
@@ -332,7 +567,24 @@ Otherwise no asset is placed.]],
 				params = { 
 					op = "MAX",
 				},
-				position = { -0.404, -0.06, },
+				position = { -0.26, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { },
+				layerType = "constant_pointcloud",
+				name = "mz_profile_steps",
+				params = { 
+					values = {
+						{ 0, 0.86, },
+						{ 0.24, 0.86, },
+						{ 0.34, 0.66, },
+						{ 0.58, 0.66, },
+						{ 0.68, 0.25, },
+						{ 1, 0.25, },
+					},
+				},
+				position = { -0.248, -0.06, },
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
@@ -341,17 +593,15 @@ Otherwise no asset is placed.]],
 						key = "out",
 						nodeName = "mz_u",
 					},
+					steps = { 
+						key = "out",
+						nodeName = "mz_profile_steps",
+					},
 				},
-				layerType = "map_clamp_map",
-				name = "mz_tilt",
-				params = { 
-					clamp = false,
-					from_x = 0,
-					from_y = 1,
-					to_x = 0.45,
-					to_y = -0.35,
-				},
-				position = { -0.392, -0.06, },
+				layerType = "pwlerp_map",
+				name = "mz_profile",
+				params = { },
+				position = { -0.236, -0.06, },
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
@@ -360,22 +610,131 @@ Otherwise no asset is placed.]],
 						key = "out",
 						nodeName = "New Normalize maps #13",
 					},
-					in2 = { 
-						key = "out",
-						nodeName = "mz_tilt",
-					},
 				},
-				layerType = "add_map",
-				name = "mz_selector_tilted",
-				params = { },
-				position = { -0.38, -0.06, },
+				layerType = "map_clamp_map",
+				name = "mz_selector_noise",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 1,
+					to_x = -0.08,
+					to_y = 0.08,
+				},
+				position = { -0.224, -0.06, },
 			},
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
 				inputs = { 
 					in1 = { 
 						key = "out",
-						nodeName = "mz_selector_tilted",
+						nodeName = "mz_profile",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_selector_noise",
+					},
+				},
+				layerType = "add_map",
+				name = "mz_selector_raw",
+				params = { },
+				position = { -0.212, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					seed = { 
+						key = "seed",
+						nodeName = "Data",
+					},
+				},
+				layerType = "fractal_noise_map",
+				name = "mz_island_kind_noise",
+				params = { 
+					frequency = 0.0003,
+					gain = 0.5,
+					lacunarity = 2.0,
+					numOctaves = 2,
+				},
+				position = { -0.2, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_island_kind_noise",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_island_hilly",
+				params = { 
+					clamp = true,
+					from_x = -0.04,
+					from_y = 0.04,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.188, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_island",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_island_hilly",
+					},
+				},
+				layerType = "mul_map",
+				name = "mz_island_hills",
+				params = { },
+				position = { -0.176, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_island_hills",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_island_lift",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 1,
+					to_x = 0,
+					to_y = 0.4,
+				},
+				position = { -0.164, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_selector_raw",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_island_lift",
+					},
+				},
+				layerType = "add_map",
+				name = "mz_selector_lifted",
+				params = { },
+				position = { -0.152, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_selector_lifted",
 					},
 				},
 				layerType = "map_clamp_map",
@@ -387,7 +746,347 @@ Otherwise no asset is placed.]],
 					to_x = 0,
 					to_y = 1,
 				},
-				position = { -0.368, -0.06, },
+				position = { -0.14, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					seed = { 
+						key = "seed",
+						nodeName = "Data",
+					},
+				},
+				layerType = "fractal_noise_map",
+				name = "mz_floor_noise",
+				params = { 
+					frequency = 0.00035,
+					gain = 0.5,
+					lacunarity = 2.0,
+					numOctaves = 2,
+				},
+				position = { -0.128, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { },
+				layerType = "constant_pointcloud",
+				name = "mz_floor_steps",
+				params = { 
+					values = {
+						{ -1, 0, },
+						{ -0.55, 0, },
+						{ 0.55, -1140, },
+						{ 1, -1140, },
+					},
+				},
+				position = { -0.116, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_floor_noise",
+					},
+					steps = { 
+						key = "out",
+						nodeName = "mz_floor_steps",
+					},
+				},
+				layerType = "pwlerp_map",
+				name = "mz_floor_neg",
+				params = { },
+				position = { -0.104, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "New Add maps #329",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_floor_neg",
+					},
+				},
+				layerType = "add_map",
+				name = "mz_valley_dist",
+				params = { },
+				position = { -0.092, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_valley_dist",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_valley_river",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 1500,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.08, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "New Add maps #329",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_hill_river",
+				params = { 
+					clamp = true,
+					from_x = 150,
+					from_y = 1850,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.068, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_water",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_dry_land",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 0.02,
+					to_x = 1,
+					to_y = 0,
+				},
+				position = { -0.056, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_dry_land",
+					},
+				},
+				layerType = "distance_map",
+				name = "mz_shore_dist",
+				params = { 
+					threshold = 0,
+				},
+				position = { -0.044, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_shore_dist",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_shore_high",
+				params = { 
+					clamp = true,
+					from_x = 60,
+					from_y = 960,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.032, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_shore_dist",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_shore_hill",
+				params = { 
+					clamp = true,
+					from_x = 20,
+					from_y = 670,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { -0.02, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_valley_river",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_shore_high",
+					},
+				},
+				layerType = "mul_map",
+				name = "mz_valley",
+				params = { },
+				position = { -0.008, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_hill_river",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_shore_hill",
+					},
+				},
+				layerType = "mul_map",
+				name = "mz_hill_valley",
+				params = { },
+				position = { 0.004, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "New Add maps #329",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_bank_river",
+				params = { 
+					clamp = true,
+					from_x = 60,
+					from_y = 420,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { 0.016, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_shore_dist",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_bank_shore",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 140,
+					to_x = 0,
+					to_y = 1,
+				},
+				position = { 0.028, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_bank_river",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_bank_shore",
+					},
+				},
+				layerType = "mul_map",
+				name = "mz_bank",
+				params = { },
+				position = { 0.04, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_bank",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_ground",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 1,
+					to_x = 0,
+					to_y = 4,
+				},
+				position = { 0.052, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mountains",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_ground",
+					},
+				},
+				layerType = "add_map",
+				name = "mz_land",
+				params = { },
+				position = { 0.064, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "mz_valley",
+					},
+				},
+				layerType = "map_clamp_map",
+				name = "mz_biome_cap",
+				params = { 
+					clamp = true,
+					from_x = 0,
+					from_y = 0.05,
+					to_x = 1.2,
+					to_y = 4,
+				},
+				position = { 0.076, -0.06, },
+			},
+			{ 
+				color = { 0.9, 0.45, 0.1, 0.6, },
+				inputs = { 
+					in1 = { 
+						key = "out",
+						nodeName = "New Remap Map #59",
+					},
+					in2 = { 
+						key = "out",
+						nodeName = "mz_biome_cap",
+					},
+				},
+				layerType = "compare_map",
+				name = "mz_biomes",
+				params = { 
+					op = "MIN",
+				},
+				position = { 0.088, -0.06, },
 			},
 			{ 
 				color = { 0.01, 0.1, 0.2, 0.6, },
@@ -529,7 +1228,7 @@ Otherwise no asset is placed.]],
 					},
 					in2 = { 
 						key = "out",
-						nodeName = "river_cut_02",
+						nodeName = "mz_hill_valley",
 					},
 				},
 				layerType = "mul_map",
@@ -710,7 +1409,7 @@ Otherwise no asset is placed.]],
 					},
 					in2 = { 
 						key = "out",
-						nodeName = "river_cut_03",
+						nodeName = "mz_valley",
 					},
 				},
 				layerType = "mul_map",
@@ -745,7 +1444,7 @@ Otherwise no asset is placed.]],
 					},
 					in2 = { 
 						key = "out",
-						nodeName = "river cut 04",
+						nodeName = "mz_valley",
 					},
 				},
 				layerType = "mul_map",
@@ -2050,7 +2749,7 @@ Otherwise no asset is placed.]],
 				inputs = { 
 					in1 = { 
 						key = "out",
-						nodeName = "mountains",
+						nodeName = "mz_land",
 					},
 					in2 = { 
 						key = "out",
@@ -3759,7 +4458,7 @@ Otherwise no asset is placed.]],
 				inputs = { 
 					in1 = { 
 						key = "out",
-						nodeName = "river cut 04 #0",
+						nodeName = "mz_valley",
 					},
 					in2 = { 
 						key = "out",
@@ -4035,7 +4734,7 @@ Otherwise no asset is placed.]],
 				inputs = { 
 					mask = { 
 						key = "out",
-						nodeName = "New Constant map #316",
+						nodeName = "mz_lake_blocked",
 					},
 					max = { 
 						key = "mapBoundsMax",
@@ -4051,7 +4750,7 @@ Otherwise no asset is placed.]],
 					},
 					sizeAndScale = { 
 						key = "out",
-						nodeName = "Atlas scales #0",
+						nodeName = "mz_lake_sizes",
 					},
 				},
 				layerType = "gui/node_editor/random_quads.node",
@@ -6023,7 +6722,7 @@ Otherwise no asset is placed.]],
 				inputs = { 
 					output = { 
 						key = "out",
-						nodeName = "New Remap Map #59",
+						nodeName = "mz_biomes",
 					},
 				},
 				layerType = "output_biomes",
@@ -6055,7 +6754,7 @@ Otherwise no asset is placed.]],
 				inputs = { 
 					output = { 
 						key = "out",
-						nodeName = "mountain height",
+						nodeName = "mountains without river",
 					},
 				},
 				layerType = "output_biomes",

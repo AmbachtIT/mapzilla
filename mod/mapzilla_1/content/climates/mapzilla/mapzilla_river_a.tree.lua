@@ -181,6 +181,10 @@ Otherwise no asset is placed.]],
 			{ 
 				color = { 0.9, 0.45, 0.1, 0.6, },
 				inputs = { 
+					amount = { 
+						key = "output",
+						nodeName = "River amount range",
+					},
 					boundsMax = { 
 						key = "mapBoundsMax",
 						nodeName = "data_gen Copy",
@@ -188,6 +192,10 @@ Otherwise no asset is placed.]],
 					boundsMin = { 
 						key = "mapBoundsMin",
 						nodeName = "data_gen Copy",
+					},
+					lakes = { 
+						key = "out",
+						nodeName = "Ocean Amount",
 					},
 					seed = { 
 						key = "seed",
@@ -197,9 +205,11 @@ Otherwise no asset is placed.]],
 				layerType = "mapzilla/river.node",
 				name = "mz_river_data",
 				params = { 
+					amount = 0.5,
+					lakes = 0.5,
 					seed = 0,
 				},
-				position = { -0.356, -0.06, },
+				position = { 0.1, -0.06, },
 			},
 			{ 
 				color = { 0.01, 0.1, 0.2, 0.6, },

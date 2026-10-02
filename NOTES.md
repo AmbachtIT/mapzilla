@@ -87,7 +87,8 @@ Settled by probe:
 - **The scripted river works.** One trunk with a three-way split appeared in
   the game exactly as `nodes.script.lua` lays it out.
 
-Confirmed in the game with "Temperate + River to sea" - river, delta, sea and
+Confirmed in the game with "Mountains to delta" (first named "Temperate +
+River to sea"; its files are still `mapzilla_temperate_river_sea`) - river, delta, sea and
 mountains all came out oriented correctly:
 
 - **A mod can ship a texture for `rasterizer_map`**, named with the mod prefix:
@@ -101,6 +102,106 @@ mountains all came out oriented correctly:
   stock lake map, and stock turns it into biome 0 with shore and textures.
 - **Mountains by tilting the biome selector** (`New Normalize maps #13`, 0..1,
   split into biome 1..4 by interval) along the same axis.
+
+## The river tree and the relief along it
+
+Built, checked offline, not yet seen in the game:
+
+- **Tree.** Every river is listed mouth first, source last - stock's order,
+  which puts the pointed tip on the source. Tributaries are marched upstream
+  from a point on their parent, leaving at 35-50 degrees and bending further
+  away, so they join pointing downstream. Rivers keep 1150m apart; a
+  tributary's first four points are checked at 500m and not against its
+  parent, or neighbours cross on the way out.
+- **Width from discharge.** Discharge is kilometres of channel upstream,
+  tributaries included; half-width is 15 * sqrt(discharge), between 9 and
+  140m. Depth follows width.
+- **No pond at the source.** Stock ends a river with width 0 and a width
+  tangent of -1000. Widths are hermite-interpolated, so that overshoots by
+  about 150m just before the tip - unnoticed on a 60m stock river, a round
+  pond on a 9m stream. Ending with a flat width tangent avoids it.
+- **Meanders.** The planned course (points 450m apart) is subdivided to 150m
+  and each point pushed sideways by a sine of distance travelled. Wavelength
+  is 13 river widths, between 1500 and 3200m; amplitude is a fraction of the
+  wavelength that rises from 0.06 in the highland to 0.21 in the lowland.
+  Every bend (half wave) draws its own length, 0.55 to 1.9 times that, and
+  its own reach, changed where the sine crosses zero so nothing kinks - a
+  single fixed wavelength made the bends come at an obviously even beat. The
+  swing fades to nothing at every confluence and end, so rivers still meet
+  where planned. Stock's method - swinging the hermite tangent to alternate
+  sides at every point - was tried first and gives a 900m zigzag at any
+  strength that shows. A finished 16km map carries about 1000 river points.
+- **Long axis.** The river runs along the longer side of the map.
+- **Rivers slider.** The stock slider's remapped value is wired into the node
+  as `amount` and sets confluence spacing, 5400m down to 2200m.
+- **Relief.** The biome selector becomes a profile along the river's axis
+  (`pwlerp_map` over a `constant_pointcloud` of steps) plus or minus 0.08 of
+  stock noise: 0.86 for the first quarter (highland), 0.66 through the middle
+  (hills), 0.25 from two thirds on (plains). A plain ramp was tried first and
+  crossed the 0.56-0.75 hills window so fast that the hills went unnoticed.
+- **Valleys.** Stock multiplies each zone's height by a ramp of distance to
+  the nearest river (`river_cut_02`: 0..500 for hills; `river_cut_03`,
+  `river cut 04`, `river cut 04 #0`: 0..1500 for upland, highland and the
+  alpine stamps), in the units of `New Add maps #329` - about 2.6 per metre if
+  `distance_map` is in metres, which is not established. Ours start the
+  highland ramp only beyond a valley floor, leaving flat ground along every
+  river as buildable land in the mountains, and stretch the hills ramp to
+  150..1850 so the hills roll down to the water instead of ending in a bluff.
+  The floor width is a map, not a number: a slow noise (0.00035, two octaves)
+  read through a `pwlerp_map` curve and subtracted from the distance before
+  the ramp. The curve is a straight line from 0 to 1140. One that kept most
+  valleys shut and opened a few to 2600 was tried and looked worse in the
+  game.
+
+- **Shores.** How stock makes a lake: `Sea Rasterization` stamps lake
+  outlines anywhere on the map (its quad mask is a constant 0);
+  `Biome distance 0` is, inside an outline, the distance to its edge; and the
+  biome 0 mask rises from 0 at the edge to 1 at 400 inside. `maskcomb_map5`
+  blends by that mask between the land and the lake bed at -100m. So nothing
+  outside the outline changes, and where the land is 150m high the whole
+  drop to the water happens in the first 240 or so inside it - a hole with
+  cliffs, cut through mountains and valleys alike. Ours adds a second
+  `distance_map`, from the land side, and multiplies the hill and highland
+  heights by a ramp of it (20..670 and 60..960), exactly as the river cuts
+  do, so the land comes down to a lake before it gets there.
+- **Lakes on the rivers.** The river node widens a stretch of river into a
+  lake: 3 to 7 planned points long, up to 170-420m of extra half-width, each
+  with its own fullness, skew and lean to one bank. Meanders are stilled
+  inside it. Because a lake is part of `river_map`, the valley shaping gives
+  it shores with no further work. The stock Lakes slider (`Ocean Amount`,
+  key `oceans`) is wired in as `lakes` and sets the count, about 1 to 7 on a
+  16km map.
+- **Stock lakes, demoted.** `Sea quad generator`'s mask was a constant 0 -
+  anywhere. Ours allows a centre only in the lowland stretch of the river's
+  axis and clear of rivers, and stamps the atlas at 3200m instead of 6000m,
+  so what is left is the odd isolated lowland lake.
+- **Islands.** Peaks of a noise (0.0006, three octaves) above 0.30, counted
+  only from 0.035 of the map past the coastline, are multiplied out of the
+  sea mask. Where a second, slower noise (0.0003) is positive the selector
+  is raised by 0.40 inside them, so about half the islands are hills and the
+  rest stay flat. The shore ramps shape their coasts like any other.
+- **Flattened land sits at the water level.** `map.waterLevel` is 0.0
+  (`gui/menu/new_game_or_map_settings_page.tl`), and land multiplied down by
+  a river or shore ramp is at height 0 too - the final sum leaves it 0.01m
+  up. It renders as land. Stock never has this over any area: its ramps
+  start at the river, and its plains are 0-4m. Ours adds 4m to all land,
+  eased to nothing at river banks and shores, on the land side of the final
+  sum. Confirmed in the game: with the lift, towns appear on
+  the highland valley floors.
+- **Towns stayed out of the highland valleys** although the floors looked
+  flat and wide enough. The placer is native and unreadable, so the cause is
+  not established. Two candidates, both acted on: (1) the labels - stock's
+  `Biomes Output` is built from the zone masks alone and its `mountains`
+  layer is the raw alpine stamp, so a flattened valley floor is still
+  reported as biome 3/4 and as mountains; ours caps the biome map at biome 1
+  where the highland has been pulled fully down and exports the stamp as cut
+  by the valleys. (2) room - a town needs a level footprint on one side of
+  the river, and the old floors were at most about 440m a side; the new curve
+  reaches about 1000m. `BaseConfig.Locations.TownParamList.allowInRoughTerrain`
+  exists and would be a third lever, from a mod script rather than the tree.
+- `distance_map` semantics, worked out from how stock uses it: for a pixel
+  above the threshold it gives the distance to the nearest pixel at or below
+  it; pixels at or below get 0. Stock feeds it inverted masks for that reason.
 
 ## Files that make up a generator
 

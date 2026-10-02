@@ -8,6 +8,8 @@ return {
 	inputs = {
 		{ key = "boundsMin", type = "Point", displayName = "Bounds Min", desc = "Minimum corner of the map" },
 		{ key = "boundsMax", type = "Point", displayName = "Bounds Max", desc = "Maximum corner of the map" },
+		{ key = "amount", type = "Float", displayName = "Tributary Amount", desc = "How densely tributaries join, between [0, 1]", optional = true },
+		{ key = "lakes", type = "Float", displayName = "Lake Amount", desc = "How many lakes lie along the rivers, between [0, 1]", optional = true },
 	},
 	outputs = {
 		{ key = "points", type = "PointCloud", displayName = "Points", desc = "Coordinates of the River" },
@@ -22,7 +24,7 @@ return {
 	def = {
 		displayName = "Mapzilla River",
 		category = "map_ridge_river",
-		description = "One river across the map that fans out into a delta",
+		description = "One river and its tributaries, running the length of the map and fanning out into a delta",
 		order = 1535,
 	},
 	applyScript = {
