@@ -1,0 +1,15 @@
+{
+    "authors": [
+        {
+            "name": "Bram Fokke",
+            "role": "CREATOR"
+        }
+    ],
+    "description": "Adds map generators that put geological features from more than one climate on the same map.\n\nEach generator is a stock one with extra features confined to regions of the map, so one side can look different from the other. The first is Temperate + Mesas: the temperate generator with the desert's mesas rising from the plains in part of the map. Pick it from the Generator list in the new game dialog; the stock sliders still work.\n\nGround textures and vegetation stay those of the chosen climate.\n\nAI Disclaimer: Claude Code was used to create this mod.",
+    "name": "Mapzilla",
+    "summary": "Map generators that mix geological features from different climates.",
+    "tags": [
+        "Script Mod"
+    ],
+    "url": "https://github.com/AmbachtIT/mapzilla"
+}

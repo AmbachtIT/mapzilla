@@ -1,0 +1,23 @@
+{
+    "autoActivate": false,
+    "cosmetic": true,
+    "dependencies": null,
+    "incompatibilities": null,
+    "modId": "mapzilla_1",
+    "options": null,
+    "params": null,
+    "preRunScript": {
+        "fileName": ""
+    },
+    "postRunScript": {
+        "fileName": ""
+    },
+    "revision": 1,
+    "runScript": {
+        "fileName": ""
+    },
+    "severityAdd": "None",
+    "severityRemove": "None",
+    "url": "https://github.com/AmbachtIT/mapzilla",
+    "visible": true
+}

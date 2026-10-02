@@ -1,0 +1,14 @@
+{
+    "archives": null,
+    "files": [
+        "climates/mapzilla/mapzilla_river_a.gen.lua",
+        "climates/mapzilla/mapzilla_river_a.tree.lua",
+        "climates/mapzilla/mapzilla_temperate_mesas.gen.lua",
+        "climates/mapzilla/mapzilla_temperate_mesas.tree.lua",
+        "climates/mapzilla/mapzilla_temperate_river_sea.gen.lua",
+        "climates/mapzilla/mapzilla_temperate_river_sea.tree.lua",
+        "mapzilla/nodes.script.lua",
+        "mapzilla/river.node.lua",
+        "mapzilla/tex/gradient.tga"
+    ]
+}
