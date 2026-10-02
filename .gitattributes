@@ -1,0 +1,5 @@
+# LF everywhere: in the repository and in the working tree, so a checkout on
+# Windows round-trips byte-for-byte. This overrides core.autocrlf, which is
+# set to true on this machine and would otherwise rewrite every text file to
+# CRLF on checkout. The game reads .lua/.tl with either ending.
+* text=auto eol=lf
