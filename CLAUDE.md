@@ -29,7 +29,18 @@ mountains to the sea and ends in a delta. Three levers have been found:
   scripts rather than engine code. `content/mapzilla/` holds our own: a
   `.node.lua` definition plus `nodes.script.lua`. Proven in the game.
 
-Ground textures and vegetation stay those of the generator's climate.
+Ground textures and vegetation stay those of the generator's climate, and that
+is a constraint rather than a stage the mod is passing through. **Mapzilla does
+not ship a climate of its own.** Shipping one is the only way to change the
+texture rules, and it costs too much: the climate selection page is built from
+every visible `.clima`, so a mod that ships one adds a fifth card beside
+Temperate, Desert, Subarctic and Tropical rather than a variant under
+Temperate - and savegames record the climate by resource name, so every map
+ever made with it would need the mod installed to load. Overriding the stock
+climate's tree in place is worse: it would change every temperate map in the
+game. So when something looks wrong, change the terrain handed to the texture
+tree, not the rules it reads it with. See "The texture tree depends on the
+generator" in NOTES.md for what the rules actually are.
 
 Generators currently built:
 

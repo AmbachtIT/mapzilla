@@ -50,6 +50,13 @@ including the two access violations that the connection-index bug turned out to 
 The listing image is drawn by a script in `tools/` rather than painted, for the
 same reason: so it can be regenerated and reviewed rather than fiddled with.
 
+### About AI
+
+Some people dislike using AI in principle. I ask you not to judge this mod based on the fact 
+that I used AI during its development. Without AI, writing the mod would have been much harder
+if not impossible (for me, at least). I take full responsibility for the quality of this mod. 
+If you believe something is not working as intended, let me know and I will try to fix it.
+
 ### The listing image
 
 `tools/make_listing_image.ps1` draws it with GDI+, so it can be regenerated
@@ -68,6 +75,9 @@ type-checking against the game's shipped `tealdef` definitions.
 The mod logs with the prefix `[mapzilla]`. If that prefix never appears in
 the log, the game script never ran.
 
+## My mods
+* [Mapzilla](https://mod.io/g/transportfever3/m/mapzilla) - A more varied map generator (this mod)
+* [Town Clustering](https://mod.io/g/transportfever3/m/town-clustering) - Cluster towns to create agglomerations
 
 ## Licence
 

@@ -745,7 +745,29 @@ RIVER_TO_SEA = {
     # opened a few into much bigger basins (up to 2600) was tried and looked
     # worse in the game; this is the shape that looked right.
     "valley_floor_frequency": 0.00035,
-    "valley_floor_curve": [[-1, 0], [-0.55, 0], [0.55, 1140], [1, 1140]],
+    # 820 is about 315m, and the noise spends most of its time well below the
+    # top of the curve, so a floor averages nearer 160m a side. It was 1140
+    # (440m): wide enough that a mountain valley read as a basin, and wide
+    # enough that the flat ground went on long after the gravel band ended.
+    # Narrowing it does not shrink that band - the band is measured from the
+    # water and belongs to the river, not the floor - but it replaces flat
+    # sandy ground with rising grassy ground, which is the point.
+    "valley_floor_curve": [[-1, 0], [-0.55, 0], [0.55, 820], [1, 820]],
+    # And the whole distribution is scaled by where on the map the river is.
+    # One width for the entire course was the thing that read as wrong in the
+    # mountains: a floor of 150 to 300m is a floodplain on a plain and a
+    # basin in a gorge, and since the gravel band is 150m wide wherever it
+    # falls, a mountain floor of that size is gravel from wall to wall. Down
+    # on the plain the same band is a strip in a wide green field and nobody
+    # looks twice. Mountain valleys are narrow in any case: that is what the
+    # mountains did to them.
+    #
+    # Read over u, the same field everything else hangs off: highland at the
+    # left, the coast at the right. Multiplying the width rather than
+    # replacing it keeps the slow noise that makes a valley open and close
+    # along its length, and just moves the whole distribution down where the
+    # land is high.
+    "floor_by_zone": [[0, 0.55], [0.24, 0.65], [0.45, 0.85], [0.68, 1.0], [1, 1.0]],
     # A valley floor, or any ground we flatten, is the land multiplied down to
     # nothing: height 0. The water level is 0 too. So the "flat land" in the
     # mountains was a film a centimetre above the water - it looks like land,
@@ -753,10 +775,61 @@ RIVER_TO_SEA = {
     # therefore raised by this much, except within reach of water, where it
     # eases down to the bank: over bank_river (stock river-distance units)
     # beside a river, over bank_shore (metres) beside a lake or the sea.
-    "ground_lift": 4,
+    "ground_lift": 8,
     "bank_river": [60, 420],
-    "bank_shore": [0, 140],
-    "valley_climb": 1500,
+    # The shore easing is stretched to match the taller lift, or a coastline
+    # would come out of the water as a bluff rather than a beach.
+    "bank_shore": [0, 220],
+    # A valley floor pulled flat by the ramps above is a slab: the land is
+    # multiplied to nothing, so only the lift holds it up and it is level to
+    # the millimetre over hundreds of metres. Real floodplains are flat enough
+    # to build on and nowhere near that flat. This is a slow noise - about one
+    # swing per 1.2km - laid over the floor, worth this many metres at its
+    # fullest, which is a grade of about one per cent: nothing a town placer
+    # will notice, enough that the ground stops reading as poured concrete.
+    # It is faded out as the land starts to climb, so the hills and the
+    # mountains keep the shape the ramps give them, and faded to nothing at
+    # the water's edge, so the river keeps clean banks.
+    "floor_relief": 8,
+    "floor_relief_frequency": 0.0008,
+    # The relief gets its own, much shorter fades, and does not ride on `bank`
+    # the way the lift does. `bank` is built to walk the ground gently down to
+    # the water, over 162m from a river and 220m from a lake or the sea - and
+    # multiplying the relief by it held the relief down over exactly the
+    # ground that needed it: 50m from a lake shore it was worth 2m, where the
+    # land has already been pulled flat by the shore ramps. Around a lake
+    # sitting on a river, which can be 420m wide on its own, that left a
+    # smooth featureless apron, inside the gravel band the whole way. The lift
+    # still eases over the long ramp, so the ground still walks down to the
+    # water; the relief comes in over a short one, so it varies while it does.
+    "relief_bank": [60, 240],
+    "relief_shore": [0, 100],
+    # The broad relief above is faded in by `bank`, over 23 to 162m from the
+    # river - which is precisely the band the gravel is laid on, so it leaves
+    # that band as flat as it found it. A swing every 1.25km would be a tilt
+    # across a 150m strip in any case. This is the one that does the work
+    # there: a fine ripple, a swing every 250m, worth a couple of metres, held
+    # off the channel only far enough to leave its banks clean. Two metres
+    # over half a wavelength is a grade of about two per cent.
+    "floor_ripple": 3.5,
+    "floor_ripple_frequency": 0.004,
+    "floor_ripple_bank": [20, 120],
+    "floor_ripple_shore": [0, 60],
+    # How far the highland takes to climb from a valley floor to its full
+    # height, and the shape it climbs in. A straight ramp between two clamps
+    # meets the floor at a corner and the ridge at another, and a corner where
+    # a wide flat floor meets a mountainside is a wall - the wider the floor,
+    # the more it reads as one. The curve is a smoothstep, so the ground leaves
+    # the floor and arrives at full height tangentially, with the steepest part
+    # in the middle where a valley side belongs.
+    #
+    # A smoothstep is half again as steep in the middle as the straight ramp it
+    # replaces, so the climb is half again as long to keep the steepest part
+    # exactly as steep as it was. The valleys get wider; the mountains between
+    # them do not get any lower.
+    "valley_climb": 2250,
+    "valley_curve": [[round(i / 8.0, 4), round((i / 8.0) ** 2 * (3 - 2 * i / 8.0), 4)]
+                     for i in range(9)],
     # Hills: stock's 500 puts a 60m bluff beside every river. A longer, later
     # ramp lets the hills roll down to the water instead.
     "hill_floor": 150,
@@ -843,13 +916,19 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
         "fine_part", "coarse_part", "coast_mix",
         "u_coast", "sea", "water",
         "profile_steps", "profile", "selector_noise", "selector_raw", "selector",
-        "floor_noise", "floor_neg", "valley_dist", "valley_river", "hill_river",
+        "floor_noise", "floor_neg", "floor_zone_steps", "floor_zone", "floor_scaled",
+        "valley_dist", "valley_t", "valley_curve_steps",
+        "valley_river", "hill_river",
         "dry_land", "shore_dist", "shore_high", "shore_hill", "valley", "hill_valley",
         "lake_zone_steps", "lake_zone", "lake_clear", "lake_allowed", "lake_blocked",
         "island_raster", "island_param", "island_bias_steps", "island_bias", "island_noisy",
         "lake_sizes", "floor_steps", "island_noise", "island_raw", "island_gate",
         "island", "not_island", "open_sea", "island_lift", "selector_lifted",
         "biome_cap", "biomes", "bank_river", "bank_shore", "bank", "ground", "land",
+        "relief_noise", "relief_raw", "off_valley", "relief_zone", "relief", "ground_total",
+        "ripple_noise", "ripple_raw", "ripple_bank", "ripple_near", "ripple", "relief_total",
+        "relief_bank_river", "relief_bank_shore", "relief_fade",
+        "ripple_bank_shore", "ripple_fade",
         "island_kind_noise", "island_hilly", "island_hills")}
 
     def ref(key):
@@ -989,9 +1068,19 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
              params={"values": [[x, -w] for x, w in cfg["valley_floor_curve"]]}),
         node(name["floor_neg"], "pwlerp_map",
              inputs={"in1": ref("floor_noise"), "steps": ref("floor_steps")}),
+        node(name["floor_zone_steps"], "constant_pointcloud",
+             params={"values": cfg["floor_by_zone"]}),
+        node(name["floor_zone"], "pwlerp_map",
+             inputs={"in1": ref("u"), "steps": ref("floor_zone_steps")}),
+        node(name["floor_scaled"], "mul_map",
+             inputs={"in1": ref("floor_neg"), "in2": ref("floor_zone")}),
         node(name["valley_dist"], "add_map",
-             inputs={"in1": (river_dist, "out"), "in2": ref("floor_neg")}),
-        remap_map(name["valley_river"], ref("valley_dist"), 0, cfg["valley_climb"], 0, 1),
+             inputs={"in1": (river_dist, "out"), "in2": ref("floor_scaled")}),
+        remap_map(name["valley_t"], ref("valley_dist"), 0, cfg["valley_climb"], 0, 1),
+        node(name["valley_curve_steps"], "constant_pointcloud",
+             params={"values": cfg["valley_curve"]}),
+        node(name["valley_river"], "pwlerp_map",
+             inputs={"in1": ref("valley_t"), "steps": ref("valley_curve_steps")}),
         remap_map(name["hill_river"], (river_dist, "out"), cfg["hill_floor"],
                   cfg["hill_floor"] + cfg["hill_climb"], 0, 1),
 
@@ -1023,8 +1112,46 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
         node(name["bank"], "mul_map",
              inputs={"in1": ref("bank_river"), "in2": ref("bank_shore")}),
         remap_map(name["ground"], ref("bank"), 0, 1, 0, cfg["ground_lift"]),
+        # The floodplain's own relief, on the flat ground only.
+        node(name["relief_noise"], "fractal_noise_map",
+             inputs={"seed": (seed, "seed")},
+             params={"frequency": cfg["floor_relief_frequency"], "gain": 0.5,
+                     "lacunarity": 2.0, "numOctaves": 3}),
+        remap_map(name["relief_raw"], ref("relief_noise"), -1, 1, 0, cfg["floor_relief"]),
+        remap_map(name["off_valley"], ref("valley"), 0, 1, 1, 0),
+        node(name["relief_zone"], "mul_map",
+             inputs={"in1": ref("relief_raw"), "in2": ref("off_valley")}),
+        remap_map(name["relief_bank_river"], (river_dist, "out"),
+                  cfg["relief_bank"][0], cfg["relief_bank"][1], 0, 1),
+        remap_map(name["relief_bank_shore"], ref("shore_dist"),
+                  cfg["relief_shore"][0], cfg["relief_shore"][1], 0, 1),
+        node(name["relief_fade"], "mul_map",
+             inputs={"in1": ref("relief_bank_river"), "in2": ref("relief_bank_shore")}),
+        node(name["relief"], "mul_map",
+             inputs={"in1": ref("relief_zone"), "in2": ref("relief_fade")}),
+        # The fine ripple, which reaches in close enough to break up the
+        # gravel band itself.
+        node(name["ripple_noise"], "fractal_noise_map",
+             inputs={"seed": (seed, "seed")},
+             params={"frequency": cfg["floor_ripple_frequency"], "gain": 0.5,
+                     "lacunarity": 2.0, "numOctaves": 2}),
+        remap_map(name["ripple_raw"], ref("ripple_noise"), -1, 1, 0, cfg["floor_ripple"]),
+        remap_map(name["ripple_bank"], (river_dist, "out"),
+                  cfg["floor_ripple_bank"][0], cfg["floor_ripple_bank"][1], 0, 1),
+        remap_map(name["ripple_bank_shore"], ref("shore_dist"),
+                  cfg["floor_ripple_shore"][0], cfg["floor_ripple_shore"][1], 0, 1),
+        node(name["ripple_fade"], "mul_map",
+             inputs={"in1": ref("ripple_bank"), "in2": ref("ripple_bank_shore")}),
+        node(name["ripple_near"], "mul_map",
+             inputs={"in1": ref("ripple_raw"), "in2": ref("ripple_fade")}),
+        node(name["ripple"], "mul_map",
+             inputs={"in1": ref("ripple_near"), "in2": ref("off_valley")}),
+        node(name["relief_total"], "add_map",
+             inputs={"in1": ref("relief"), "in2": ref("ripple")}),
+        node(name["ground_total"], "add_map",
+             inputs={"in1": ref("ground"), "in2": ref("relief_total")}),
         node(name["land"], "add_map",
-             inputs={"in1": (land, "out"), "in2": ref("ground")}),
+             inputs={"in1": (land, "out"), "in2": ref("ground_total")}),
 
         # What the tree tells the rest of the game about the land. Stock
         # labels by zone alone, so a valley floor in the highland is still

@@ -164,6 +164,61 @@ Built, checked offline, not yet seen in the game:
   highland ramp only beyond a valley floor, leaving flat ground along every
   river as buildable land in the mountains, and stretch the hills ramp to
   150..1850 so the hills roll down to the water instead of ending in a bluff.
+  The highland ramp is also a curve rather than a straight line: a straight
+  one between two clamps meets the floor at a corner and the ridge at another,
+  and seen in the game a corner where a wide flat floor meets a mountainside
+  reads as a wall - the wider the floor, the more it does. A smoothstep leaves
+  the floor and arrives at full height tangentially, and because it is half
+  again as steep in the middle, the climb is half again as long (1500 to 2250)
+  to leave the steepest part exactly as steep as it was. Measured on a 300m
+  mountain: steepest 27 degrees before and after, full height reached 1015m
+  from the river before and 1302m after. The hills ramp is left straight -
+  over 120m of hill it is a tenth of that gradient and the corner does not
+  show.
+- **The floodplain.** A floor pulled flat by those ramps is a slab: the land
+  is multiplied to nothing, so only `ground_lift` holds it up and it is level
+  to the millimetre for hundreds of metres. The lift is 8m rather than 4, and
+  a slow noise - one swing per 1.2km, worth up to 7m, about a one per cent
+  grade - is laid over the floor on top of it. It is faded out as the land
+  starts to climb (by `valley`, so the hills and mountains keep the shape the
+  ramps give them) and to nothing at the water's edge (by `bank`, so the
+  channel keeps clean banks). The shore easing is stretched from 140m to 220m
+  to match the taller lift, or a coastline comes out of the water as a bluff.
+  That broad relief alone was not enough, for two reasons worth remembering:
+  it is faded in over 23 to 162m from the river, which is exactly the band the
+  gravel is laid on, so it left that band as flat as it found it; and a swing
+  every 1.25km is a tilt and not a texture across a strip 150m wide. A second,
+  finer ripple does the work there - a swing every 250m, 2.5m, held off the
+  channel only far enough (8 to 46m) to leave its banks clean.
+  Neither reaches the ground beside a lake or the sea while it rides on
+  `bank`, whose shore term runs over 220m: 50m from a shore the relief was
+  worth 2m, over land the shore ramps had already pulled flat. A lake on a
+  river is up to 420m wide on its own, so that apron was large, smooth,
+  featureless and gravelled throughout - which is what "flat at the same
+  level" turned out to mean. The relief and the ripple now carry their own,
+  much shorter fades (river 23..92m, shore 0..100m, and 8..46m / 0..60m for
+  the ripple) while the lift keeps the long ones. Measured beside a lake: at
+  50m out the ground now varies by about 7m where it varied by 2m, and the
+  lift still eases to the water as gently as before.
+- **Floor width by zone.** The width above is scaled by a curve over u, so a
+  valley is narrow where the land is high and keeps its full width on the
+  plain: about 186m a side at the widest in the highland against 315m on the
+  plain, averaging 93m against 157m. One width for the whole course was what
+  read as wrong in the mountains - the gravel band is 150m wherever it falls,
+  so a mountain floor of 300m is gravel from wall to wall, while the same band
+  on the plain is a strip in a wide green field. Narrowing does not shrink the
+  band; it shrinks the flat ground the band has to itself. Watch towns in the
+  highland after changing this: buildable ground per side goes from 272m to
+  208m there, and 248m was the figure that first got towns to appear at all.
+  `floor_by_zone` is the dial.
+- **Floor width.** 820 units, about 315m a side at the widest and nearer 160m
+  on average; it was 1140 (440m). Narrowing it does not shrink the gravel
+  band, which is measured from the water and belongs to the river rather than
+  the floor - it replaces flat sandy ground with rising grassy ground. Towns
+  did not lose by it: the eased ramp keeps the land under a tenth of full
+  height for 162m past the floor edge and labelled plains for 115m of that, so
+  buildable ground went from about 248m a side to about 272m even as the floor
+  itself got narrower.
   The floor width is a map, not a number: a slow noise (0.00035, two octaves)
   read through a `pwlerp_map` curve and subtracted from the distance before
   the ramp. The curve is a straight line from 0 to 1140. One that kept most
@@ -407,6 +462,59 @@ The climate's texture tree reads named maps that the generator tree writes with
 So a feature transplanted into another climate is textured by that climate's
 rules. Splicing into a stock tree keeps all of its `output_map_data` nodes, so
 this takes care of itself.
+
+### The texture tree also reads the height map, and that is a beach rule
+
+`temperate_clima.tree` has a `height_map_input`, so not every texture comes
+from the masks we write. Two layers are driven by `distance_map(height,
+threshold 0)` - the horizontal distance to the nearest ground at or below
+height 0, which is to say to the nearest water, river or sea alike:
+
+- `gravel_01` is laid on at strength 2.3 at the water's edge, falling to 0 at
+  **80m**, minus up to 2.3 of a ridged noise that breaks it into patches. It
+  is drawn at order 500, over the grass.
+- `grass_green` is multiplied by a ramp that is **0 within 50m** of water and
+  only full at **150m**.
+
+Under both is the background material, `grass_light_green`. So every water's
+edge gets a band of patchy gravel on pale grass: stock's beach, applied to
+river banks too, because the rule cannot tell a coast from a channel and has
+no idea how wide the river is - a brook and a 280m river get the same 80m.
+The plains tree mask keeps its distance from water as well (a `distance_map`
+over `Percolation`), so the same band is bare.
+
+This showed up as sandy, treeless valley floors: ours are flat, wide and at
+the water's edge by design, so the band covered them instead of sitting on a
+bank. What fixed the look was raising and roughening the floor (see the
+floodplain relief above), not fighting the rule.
+
+**Do not fight the rule by shipping a climate of our own. That is ruled out,
+and it is a decision rather than an open question - the mod works within the
+stock biomes.** It was looked at once and the reasons it was dropped are here
+so that it does not get looked at again:
+
+- `new_game_page.tl` builds the climate selection page from
+  `climateRep.getAll()`, one card per clima with `visible` set. So a mod that
+  ships a clima adds a fifth card beside Temperate, Desert, Subarctic and
+  Tropical - it does not add a texture variant under Temperate. Setting
+  `visible = false` hides the card, but then the climate can never be chosen
+  and its generators never list.
+- Savegames record the climate by resource name
+  (`savegame_react_util.tl` looks it up with `climateRep.find`), so every map
+  made with our own climate would need the mod installed to load. Pointing at
+  stock temperate keeps maps loadable without us.
+- A copied clima is 306 lines; only `nodeTree`, the name, the icon and the
+  relative `temperate.env` reference would have to change. The numbers to
+  change are the two above: `map_clamp_map8_from` (0..80) for the gravel and
+  `map_clamp_map0` (50..150) for the grass.
+- Overriding stock's `temperate_clima.tree` by shipping a file at the same
+  path would avoid the card, but it would change every temperate map in the
+  game, stock generators included, and collide with any other mod that tried
+  it. Ruled out for the same reason.
+
+So the ground textures and the vegetation are the stock climate's, and a
+feature that looks wrong under them is fixed by changing the terrain we hand
+the texture tree, not by changing the rules it reads it with.
 
 ## How a stock tree builds height
 
