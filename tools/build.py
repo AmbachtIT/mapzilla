@@ -1284,22 +1284,21 @@ RIVER_NODE = "mapzilla/river.node"
 # and the new game dialog crashes on opening if that generator is gone. So a
 # file base, once it has been selected in the game, is not free to rename or
 # remove: pick another generator in the dialog first.
+# What a published mod ships is what it must go on shipping: settings.lua
+# remembers the last generator used by resource name, and the new game dialog
+# crashes on opening if that generator has gone. The probes this one was built
+# from - the river on stock terrain, the desert's mesas in noise-picked
+# regions - are therefore not in the list. Their splices stay in this file, and
+# putting either back is one line.
 GENERATORS = (
     # (file base, stock climate, splice, label, description for the header,
     #  whether the generator gets the Layout dropdown)
-    # Shown as "Mountains to delta". The file base keeps its first name: it
-    # is what settings.lua remembers, so it cannot follow the display name.
-    ("mapzilla_temperate_river_sea", "temperate", splice_river_to_sea, "=Mountains to delta",
+    # The file base keeps its first name: it is what settings.lua remembers, so
+    # it cannot follow the display name.
+    ("mapzilla_temperate_river_sea", "temperate", splice_river_to_sea,
+     "=Mapzilla - Mountains to delta",
      "one river laid out by our scripted node, with the mountains and the sea\n"
      "-- placed around it in the layout the Layout dropdown asks for", True),
-    # The probe has none of the layout machinery - stock temperate terrain,
-    # only the river swapped - so it pins the river to the layout that assumes
-    # nothing: along the map, as it was before there were layouts.
-    ("mapzilla_river_a", "temperate", splice_river(RIVER_NODE, layout="shore"), "River probe",
-     "the river layout taken from our scripted node", False),
-    ("mapzilla_temperate_mesas", "temperate", splice_mesas, "Mesas",
-     "the desert's mesas, confined to noise-picked regions, spliced into the height chain",
-     False),
 )
 
 CUSTOM_LAYER_TYPES = {RIVER_NODE: "river"}

@@ -5,11 +5,14 @@ biome. The underlying map generation system is much more powerful, as described 
 [Dev Blog 1](https://www.transportfever3.com/news/dev-blog-episode-1-environment/).
 
 The aim of this mod is to add map generation presets that use the power of this system
-to generate more interesting maps. Currently the mod has one preset *Mountain Delta*.
+to generate more interesting maps. Currently the mod has one preset,
+*Mapzilla - Mountains to delta*.
 
 ### Presets
-## Mountain Delta
-This preset connects mountains to the ocean with a meandering river ending in a delta system.
+## Mapzilla - Mountains to delta
+A generator for the **Temperate** climate - set Climate to Temperate in the new game dialog and
+it appears in the Generator list below it. It connects mountains to the ocean with a meandering
+river ending in a delta system.
 It can lay the map out in seven ways, chosen with the **Layout** dropdown in the new game
 dialog, or left to the map seed:
 - Single shore - mountains along one side, sea along the other

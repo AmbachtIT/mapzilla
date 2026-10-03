@@ -21,8 +21,8 @@ the desert's height mapping is unclamped. The mesa generator is no longer
 built (mesas turned out not to be what the mod is for); `splice_mesas` stays in
 `tools/build.py` as the worked example of a regional stamp.
 
-A mod can supply its own **scripted node** - see below. The river probe
-replaces the temperate river layout with one from
+A mod can supply its own **scripted node** - see below. The river probe, no
+longer built, replaced the temperate river layout with one from
 `content/mapzilla/nodes.script.lua`.
 
 Confirmed in the game: the **layouts** below and the **Layout dropdown** that

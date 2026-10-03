@@ -35,9 +35,14 @@ Generators currently built:
 
 | generator | base | changes |
 |---|---|---|
-| Mountains to delta | temperate | a river tree laid out by our scripted node - trunk, tributaries and their tributaries, widening downstream with discharge - running from highland through rolling hills to flat plains, a delta and the sea, in one of seven layouts: single shore, island, inland sea, isthmus, strait, peninsula, bay |
-| Temperate + River probe | temperate | river layout from our scripted node: one river across the map that splits into a delta |
-| Temperate + Mesas | temperate | the desert's mesas inside noise-picked regions. Kept as a worked example, not as a feature |
+| Mapzilla - Mountains to delta | temperate | river systems laid out by our scripted node - trunk, tributaries and their tributaries, widening downstream with discharge - running from highland through rolling hills to flat plains, a delta and the sea, in one of seven layouts: single shore, island, inland sea, isthmus, strait, peninsula, bay |
+
+Two probes are no longer built, because what a published mod ships it must go
+on shipping - `settings.lua` remembers the last generator by resource name and
+the new game dialog crashes if it has gone. Their splices stay in `build.py`
+and putting either back in `GENERATORS` is one line: the river on otherwise
+stock temperate terrain, and the desert's mesas inside noise-picked regions
+(the worked example of a regional stamp).
 
 See NOTES.md for what was learned about the node graph and scripted nodes.
 
