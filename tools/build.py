@@ -29,6 +29,7 @@ Usage:  python tools/build.py [--game <install dir>] [--content <content dir>]
 import argparse
 import collections
 import io
+import math
 import os
 import re
 import sys
@@ -60,12 +61,17 @@ CUSTOM_NODES = {
     "river": {
         # "seed" is not declared in the .node.lua: every scripted node gets one
         # unless it says withSeed = false.
-        "inputs": {"boundsMin", "boundsMax", "amount", "lakes", "seed"},
-        # "amount" and "lakes" are optional in the .node.lua. Stock gives an
-        # optional input both a wire and a param of the same name, so we do too.
-        "params": {"amount", "lakes", "seed"},
+        "inputs": {"boundsMin", "boundsMax", "amount", "lakes", "layout", "coast",
+                   "islands", "axis", "seed"},
+        # Optional in the .node.lua, so a tree may leave the wire off. The
+        # engine then reads the value from the node's param of the same name -
+        # as stock does for every random_quads, none of which wires atlasSize.
+        "optional": {"amount", "lakes", "layout", "coast", "islands", "axis"},
+        "params": {"amount", "lakes", "layout", "coast", "islands", "axis", "seed"},
         "outputs": {"points", "widths", "depthsTangent", "tangents", "widthTangents",
-                    "layoutVertices", "layoutTexCoords"},
+                    "layoutVertices", "layoutTexCoords",
+                    "roughVertices", "roughTexCoords",
+                    "islandVertices", "islandTexCoords"},
     },
 }
 
@@ -404,7 +410,7 @@ def splice_mesas(tree, cfg=MESAS):
 
 # --- the river splice ---------------------------------------------------------
 
-def splice_river(layer_type):
+def splice_river(layer_type, layout=None):
     """Swap the stock river layout for the one from our scripted river node.
 
     The stock tree feeds river_map from river_points.node, a scripted random
@@ -413,7 +419,9 @@ def splice_river(layer_type):
     land is flattened into - stay stock. The stock node is left in place,
     unconnected.
 
-    `layer_type` is the name the tree uses for our node.
+    `layer_type` is the name the tree uses for our node. `layout` is which
+    layout the script is to lay the river out for: a layout key to fix one, or
+    None to let the generator's Layout dropdown choose - see LAYOUTS.
     """
     def splice(tree):
         rivers = [n for n in tree.nodes if n["layerType"] == "river_map"]
@@ -433,26 +441,232 @@ def splice_river(layer_type):
         lakes = (tree.need("Ocean Amount", "param_number"), "out")
 
         name = PREFIX + "river_data"
-        tree.add(node(name, layer_type,
-                      inputs={"boundsMin": stock["inputs"]["boundsMin"],
-                              "boundsMax": stock["inputs"]["boundsMax"],
-                              "amount": amount,
-                              "lakes": lakes,
-                              "seed": stock["inputs"]["seed"]},
-                      params={"amount": 0.5, "lakes": 0.5, "seed": 0}))
+        inputs = {"boundsMin": stock["inputs"]["boundsMin"],
+                  "boundsMax": stock["inputs"]["boundsMax"],
+                  "amount": amount,
+                  "lakes": lakes,
+                  "seed": stock["inputs"]["seed"]}
+        params = {"amount": 0.5, "lakes": 0.5, "seed": 0, "coast": 0.5,
+                  "islands": 0.5, "axis": 0.5,
+                  "layout": layout_value(layout) if layout else 0}
+        if layout is None:
+            # Our own params, which build_gen adds to the generator, each with
+            # what a param_number is to fall back on where the key is not set.
+            # For the layout that is 0, the dropdown's own "Random"; for the
+            # coastline it is the middle setting, because there 0 is the first
+            # setting and not an absence. Either way a generator that never got
+            # the param still makes a map.
+            for key, wire, dummy in ((LAYOUT_KEY, "layout", 0), (COAST_KEY, "coast", 0.5),
+                                     (ISLANDS_KEY, "islands", 0.5),
+                                     (AXIS_KEY, "axis", 0.5)):
+                param = PREFIX + wire + "_param"
+                tree.add(node(param, "param_number",
+                              params={"dummy": dummy, "key": key}))
+                inputs[wire] = (param, "out")
+        tree.add(node(name, layer_type, inputs=inputs, params=params))
         for key in RIVER_MAP_INPUTS:
             tree.rewire(river["name"], key, stock_points, name)
     return splice
+
+
+# --- the layouts --------------------------------------------------------------
+#
+# Where the mountains and the sea are. The river-to-sea splice below hangs
+# everything - the coastline, the relief, the lakes, the islands - off one
+# field u, which is 0 deep in the mountains and 1 out at sea. So a layout need
+# be nothing but a different u, and all of that follows it.
+#
+# A layout is a distance measured in the map frame - `a` along the map's longer
+# side, `b` across it, both 0..1 - and the two distances at which u is 0 and 1:
+#
+#   along   the distance is `a`: u runs from one end of the map to the other,
+#           which is the coast the mod started with
+#   across  |2b - 1|, the distance from the map's centre line: a fold, with the
+#           same land mirrored on both sides of it
+#   radial  the distance from the centre of the map, 1 at the middle of an edge
+#           and 1.41 in a corner
+#
+# Either end may sit off the map (a distance above 1), and that is how a layout
+# gets a broad band of mountains along an edge instead of a thin rim: the map
+# edge then lies partway up the ramp rather than at its end.
+#
+# Two layouts need a second term for their flanks, read from |2b - 1| as well:
+# "sea" raises u towards both long edges (a max, so the sea wraps round), while
+# "mountains" holds it down there (a min, so the flanks stay high).
+#
+# The numbers come from the relief profile in RIVER_TO_SEA, which reads u as
+# highland below 0.24, hills to 0.68, plains to the coast at 0.80 and sea
+# beyond. So the distance at which u is 0.24 is where the mountains begin and
+# the one at 0.80 is where the water does; the tables below are worked back
+# from where those two belong in each layout. On a 16km map:
+#
+#   shore       as before: highland the first 3.8km, sea the last 3.2km
+#   island      a massif 1.9km across in the middle, the coast 80% of the way
+#               out, so half the map is the sea around it
+#   inland_sea  a sea 7.5km across in the middle, plains and hills around it,
+#               mountains from 7.2km out to the edge and the corners
+#   isthmus     a range 4km wide down the middle, 2.4km of sea along each side
+#   strait      a channel 4km wide down the middle, mountains from 2km in
+#   peninsula   mountains across the near end, sea beyond 80% of the length
+#               and 1.2km of it along each flank
+#   bay         mountains across the near end and 1km along each flank, the
+#               sea a lobe in the far end 60% of the map wide
+LAYOUT_KEY = "mz_layout"               # the generator param, read by param_number
+COAST_KEY = "mz_coast"                 # the Coastline param, likewise
+ISLANDS_KEY = "mz_islands"             # the Islands param
+AXIS_KEY = "mz_axis"                   # and the Orientation param
+# The Coastline slider's labels. What each one does is the script's business -
+# ROUGHNESS in nodes.script.lua - because it is the script that hands the
+# amplitude to the graph, as a map; see the roughness quad below.
+COASTLINES = (("Straight",), ("Gentle",), ("Medium",), ("Rugged",), ("Wild",))
+# The Islands slider's labels, and what each does to the island threshold -
+# see "island_bias" in RIVER_TO_SEA, which is this curve. The first setting
+# takes the island noise out of the picture altogether; it is called Few and
+# not None because a coastline rough enough to wander will still strand the
+# odd piece of shelf offshore, and that is the coast's doing, not this.
+ISLANDS = (("Few",), ("Scattered",), ("Medium",), ("Dense",), ("Packed",))
+# The Orientation dropdown: which side of the map a layout runs along. Index 1
+# is Random, so 0 - what a param_number falls back on where the key is unset -
+# would be Random too; the dummy is the long side instead, which is what every
+# map did before the param existed.
+AXES = (("Random",), ("Long side",), ("Short side",))
+LAYOUT_TEX = "mapzilla_1::/mapzilla/tex/layouts.tga"
+LAYOUT_TILE = 256                      # pixels per layout in the atlas
+
+# key, kind, d0, d1, spread and band must match LAYOUTS in
+# content/mapzilla/nodes.script.lua, which lays the river out in the frame the
+# same numbers describe; check_layouts() refuses to build if the two drift
+# apart. `flank` and `name` are ours alone - the script needs neither.
+LAYOUTS = (
+    dict(key="shore", name="Single shore", kind="along", d0=0.00, d1=1.00,
+         spread=1.00, band=1.00),
+    dict(key="island", name="Island", kind="radial", d0=0.00, d1=1.00,
+         spread=1.00, band=1.00),
+    dict(key="inland_sea", name="Inland sea", kind="radial", d0=1.09, d1=0.31,
+         spread=1.00, band=1.00),
+    dict(key="isthmus", name="Isthmus", kind="across", d0=0.06, d1=0.86,
+         spread=1.00, band=1.00),
+    dict(key="strait", name="Strait", kind="across", d0=0.96, d1=0.07,
+         spread=1.00, band=1.00),
+    # The flanks are sea the whole way down, so the rivers keep to the middle.
+    dict(key="peninsula", name="Peninsula", kind="along", d0=0.00, d1=1.00,
+         spread=1.00, band=0.45, flank=("sea", 0.45, 0.95)),
+    # The delta is capped to the lobe between the flanking ridges, or its
+    # outer channels would run up into them.
+    dict(key="bay", name="Bay", kind="along", d0=0.00, d1=1.00,
+         spread=0.25, band=0.50, flank=("mountains", 0.00, 0.50)),
+)
+
+
+# The script reads a number back out of the first tile - see the roughness
+# quad in nodes.script.lua - so that tile has to stay the plain ramp whose
+# value is the map coordinate it stands for.
+assert LAYOUTS[0]["kind"] == "along" and (LAYOUTS[0]["d0"], LAYOUTS[0]["d1"]) == (0.0, 1.0) \
+    and "flank" not in LAYOUTS[0], "the first layout must be the plain ramp"
+
+
+def ramp(x, lo, hi):
+    """x from lo..hi onto 0..1, clamped. hi may lie below lo."""
+    return min(1.0, max(0.0, (x - lo) / float(hi - lo)))
+
+
+def layout_u(spec, a, b):
+    """The field a layout stamps, at (a, b) in the map frame."""
+    if spec["kind"] == "along":
+        distance = a
+    elif spec["kind"] == "across":
+        distance = abs(2 * b - 1)
+    else:
+        distance = math.hypot(2 * a - 1, 2 * b - 1)
+    u = ramp(distance, spec["d0"], spec["d1"])
+    flank = spec.get("flank")
+    if flank:
+        kind, lo, hi = flank
+        side = ramp(abs(2 * b - 1) if kind == "sea" else 1 - abs(2 * b - 1), lo, hi)
+        # A plain max (or min) would meet the end ramp at a right angle and
+        # leave the map with square corners. Taking the two terms in quadrature
+        # rounds them off instead, and still leaves the centre line - where the
+        # flank term is out of the way - exactly u, which is where the river is
+        # laid out and the only place the two have to agree.
+        if kind == "sea":
+            u = min(1.0, math.hypot(u, side))
+        else:
+            u = 1 - min(1.0, math.hypot(1 - u, 1 - side))
+    return u
+
+
+def layout_value(key):
+    """What param_number gives for the layout param when `key` is chosen.
+
+    A param's value is its place on the dropdown mapped onto 0..1 -
+    (index - 1) / (count - 1) - and index 1 is "Random", so the first layout
+    lands one step above 0. Inferred, not documented: every stock slider is
+    read through a remap_number over 0..1, and the dummy a param_number falls
+    back on is 0.5 where the slider's default is the middle of five values.
+    """
+    keys = [spec["key"] for spec in LAYOUTS]
+    return round((keys.index(key) + 1) / float(len(LAYOUTS)), 6)
+
+
+def write_layout_atlas(path, tile=LAYOUT_TILE):
+    """The layouts as one row of tiles: an 8-bit greyscale TGA, the format of
+    the stock stamps (climates/gen/tex/ridge.tga is 1024x256 of the same).
+
+    A tile covers the layout quad, which overhangs the map by LAYOUT_MARGIN on
+    every side, so the map is the middle of the tile and the tile's edges -
+    where a texture filters against its neighbour - are never sampled. One row
+    of tiles, not a grid, because how a row offset reaches the texture is
+    plain and how a column offset does is guesswork. Every field is
+    symmetrical across the map's centre line, so which way up the rows are
+    read does not matter either.
+    """
+    width, height = tile * len(LAYOUTS), tile
+    header = bytes([0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    width & 255, width >> 8, height & 255, height >> 8, 8, 8])
+    lo, span = -LAYOUT_MARGIN, 1 + 2 * LAYOUT_MARGIN
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(header)
+        for j in range(height):
+            b = lo + span * (j + 0.5) / height
+            row = bytearray()
+            for spec in LAYOUTS:
+                for i in range(tile):
+                    a = lo + span * (i + 0.5) / tile
+                    row.append(int(round(255 * layout_u(spec, a, b))))
+            f.write(bytes(row))
+
+
+LAYOUT_LUA_RE = re.compile(
+    r'\{ key = "(\w+)",\s+kind = "(\w+)",\s+d0 = ([\d.]+), d1 = ([\d.]+),'
+    r'\s+spread = ([\d.]+), band = ([\d.]+) \},')
+
+
+def check_layouts(script_path):
+    """The script lays the river out in the frame these numbers describe and
+    build.py bakes the field from them, in two languages. Rather than leave a
+    comment to keep them in step, read the script's table back and compare."""
+    text = io.open(script_path, encoding="utf-8").read()
+    found = [(key, kind, float(d0), float(d1), float(spread), float(band))
+             for key, kind, d0, d1, spread, band in LAYOUT_LUA_RE.findall(text)]
+    want = [(s["key"], s["kind"], s["d0"], s["d1"], s["spread"], s["band"])
+            for s in LAYOUTS]
+    if found != want:
+        return ["LAYOUTS in %s does not match the table in build.py:"
+                "\n    script: %s\n     build: %s"
+                % (os.path.basename(script_path), found, want)]
+    return []
 
 
 # --- the river-to-sea splice --------------------------------------------------
 #
 # On top of our river: mountains at its source and a sea at its mouth.
 #
-# The river node also publishes a quad covering the map. Rasterised with a
-# gradient texture, that is a map of u - 0 at the mountain end, 1 at the sea
-# end - which no stock node can provide, since nothing in the graph knows
-# which way our script turned the river. Everything else hangs off u:
+# The river node also publishes a quad covering the map. Rasterised with the
+# layout atlas, that is a map of u - 0 deep in the mountains, 1 out at sea -
+# which no stock node can provide, since nothing in the graph knows which way
+# our script turned the river or which layout it chose. Everything else hangs
+# off u:
 #
 #   sea        where u (plus a wobble) passes the coast, the map is declared
 #              lake. Stock already knows what a lake is: it becomes biome 0,
@@ -471,15 +685,32 @@ def splice_river(layer_type):
 #   islands    noise peaks out at sea are left as land, and lifted into hills.
 
 LAYOUT_MARGIN = 0.1     # must match LAYOUT_MARGIN in content/mapzilla/nodes.script.lua
-GRADIENT_TEX = "mapzilla_1::/mapzilla/tex/gradient.tga"
 
 RIVER_TO_SEA = {
-    # Where the coast is, in u. The river script opens its delta at 0.66.
+    # Where the coast is, in u, for every layout. The river script opens its
+    # delta at 0.66.
     "coast": 0.80,
-    # The coastline wanders by this much of the map either way, on a noise of
-    # about one swing per 3km, so it is not a ruled line.
-    "coast_wobble": 0.05,
+    # The coastline wanders either way on a noise of about one swing per 3km,
+    # so it is not a ruled line. How far is the Coastline param's business: the
+    # river node works it out - it is the only thing that knows how much of the
+    # map the layout squeezes u into - and hands it over as a map, by way of a
+    # quad pointing at one texel of the ramp. See ROUGHNESS in the script.
     "coast_frequency": 0.0003,
+    # A second, finer octave - one swing per 1.1km, and half that again within
+    # it - is what turns a wandering coastline into a ragged one: bays get
+    # headlands, headlands get coves. It takes a share of the wobble rather
+    # than adding to it, so the two together never reach further than the
+    # ceiling the script holds them to, and what changes with the setting is
+    # the character of the coast rather than only its reach.
+    #
+    # The share is read off how far the coast wanders at all, which is the
+    # Coastline setting by another name - it is the one number in the graph
+    # that follows it. So: nothing at Straight, and at Wild a coast that is
+    # two fifths fine detail. A layout that folds the map reaches a given
+    # wander at a lower setting, and gets the matching detail there too.
+    "coast_fine_frequency": 0.0009,
+    "coast_fine_share": [[0, 0], [0.012, 0], [0.028, 0.06], [0.05, 0.14],
+                         [0.10, 0.28], [0.18, 0.40]],
     # The land selector runs 0..1, higher meaning higher ground. At the default
     # Mountains setting stock reads it as: below 0.56 plains (0-4m), to 0.75
     # rolling hills (5-120m), to 0.83 upland (80-140m), above that highland
@@ -566,6 +797,13 @@ RIVER_TO_SEA = {
     # the hills band, or every island would be a flat shoal.
     "island_frequency": 0.0006,
     "island_threshold": 0.30,
+    # The Islands slider, as a curve. The threshold above stays put and the
+    # slider shifts the noise under it instead, which is the same thing and
+    # keeps the soft edge the threshold gives an island's outline. The middle
+    # setting moves nothing, so it is the islands the mod has always had; the
+    # first drops the noise so far that the threshold is out of its reach
+    # altogether, which is the only way to ask for no islands at all.
+    "island_bias": [[0, -3.0], [0.25, -0.12], [0.5, 0.0], [0.75, 0.12], [1, 0.30]],
     "island_offshore": 0.035,
     "island_lift": 0.40,
     # Not every island is lifted. A second, slower noise - one swing per 3km
@@ -600,11 +838,15 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
                  for n in ("river_cut_03", "river cut 04", "river cut 04 #0")]
 
     name = {key: PREFIX + key for key in (
-        "u_raster", "u", "coast_noise", "coast_wobble", "u_coast", "sea", "water",
+        "u_raster", "u", "coast_noise", "rough_raster", "rough", "coast_wobble",
+        "fine_steps", "fine_share", "coarse_share", "coast_fine_noise",
+        "fine_part", "coarse_part", "coast_mix",
+        "u_coast", "sea", "water",
         "profile_steps", "profile", "selector_noise", "selector_raw", "selector",
         "floor_noise", "floor_neg", "valley_dist", "valley_river", "hill_river",
         "dry_land", "shore_dist", "shore_high", "shore_hill", "valley", "hill_valley",
         "lake_zone_steps", "lake_zone", "lake_clear", "lake_allowed", "lake_blocked",
+        "island_raster", "island_param", "island_bias_steps", "island_bias", "island_noisy",
         "lake_sizes", "floor_steps", "island_noise", "island_raw", "island_gate",
         "island", "not_island", "open_sea", "island_lift", "selector_lifted",
         "biome_cap", "biomes", "bank_river", "bank_shore", "bank", "ground", "land",
@@ -614,16 +856,16 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
         return (name[key], "out")
 
     for block in (
-        # u, 0 at the mountain end to 1 at the sea end. The quad overhangs the
-        # map, so the map itself only spans the middle of the gradient.
+        # u, 0 deep in the mountains to 1 out at sea. The script points the
+        # quad's texture coordinates at the tile of the layout it chose, and
+        # the tile already allows for the quad's overhang, so nothing is left
+        # for the graph to undo - the remap only clamps.
         node(name["u_raster"], "rasterizer_map",
              inputs={"texCoords": (layout, "layoutTexCoords"),
                      "vertices": (layout, "layoutVertices")},
-             params={"op": "Max", "tex": GRADIENT_TEX,
+             params={"op": "Max", "tex": LAYOUT_TEX,
                      "wrapS": "REPEAT", "wrapT": "REPEAT"}),
-        remap_map(name["u"], ref("u_raster"),
-                  LAYOUT_MARGIN / (1 + 2 * LAYOUT_MARGIN),
-                  (1 + LAYOUT_MARGIN) / (1 + 2 * LAYOUT_MARGIN), 0, 1),
+        remap_map(name["u"], ref("u_raster"), 0, 1, 0, 1),
 
         # Where a stock lake may be stamped: the lowland stretch, away from
         # rivers. random_quads keeps a quad whose centre reads 0, so the mask
@@ -646,8 +888,33 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
              inputs={"seed": (seed, "seed")},
              params={"frequency": cfg["coast_frequency"], "gain": 0.5,
                      "lacunarity": 2.0, "numOctaves": 4}),
-        remap_map(name["coast_wobble"], ref("coast_noise"), -1, 1,
-                  -cfg["coast_wobble"], cfg["coast_wobble"], clamp=False),
+        # How far the coast wanders, as a map: one quad, every corner of it
+        # pointing at the same texel, so the whole map reads that one value.
+        node(name["rough_raster"], "rasterizer_map",
+             inputs={"texCoords": (layout, "roughTexCoords"),
+                     "vertices": (layout, "roughVertices")},
+             params={"op": "Max", "tex": LAYOUT_TEX,
+                     "wrapS": "REPEAT", "wrapT": "REPEAT"}),
+        remap_map(name["rough"], ref("rough_raster"), 0, 1, 0, 1),
+        # The fine octave's share of the wobble, and the coarse one's, which
+        # is the rest of it.
+        node(name["fine_steps"], "constant_pointcloud",
+             params={"values": cfg["coast_fine_share"]}),
+        node(name["fine_share"], "pwlerp_map",
+             inputs={"in1": ref("rough"), "steps": ref("fine_steps")}),
+        remap_map(name["coarse_share"], ref("fine_share"), 0, 1, 1, 0),
+        node(name["coast_fine_noise"], "fractal_noise_map",
+             inputs={"seed": (seed, "seed")},
+             params={"frequency": cfg["coast_fine_frequency"], "gain": 0.5,
+                     "lacunarity": 2.0, "numOctaves": 2}),
+        node(name["fine_part"], "mul_map",
+             inputs={"in1": ref("coast_fine_noise"), "in2": ref("fine_share")}),
+        node(name["coarse_part"], "mul_map",
+             inputs={"in1": ref("coast_noise"), "in2": ref("coarse_share")}),
+        node(name["coast_mix"], "add_map",
+             inputs={"in1": ref("coarse_part"), "in2": ref("fine_part")}),
+        node(name["coast_wobble"], "mul_map",
+             inputs={"in1": ref("coast_mix"), "in2": ref("rough")}),
         node(name["u_coast"], "add_map",
              inputs={"in1": ref("u"), "in2": ref("coast_wobble")}),
         remap_map(name["sea"], ref("u_coast"), cfg["coast"], cfg["coast"] + 0.005, 0, 1),
@@ -658,7 +925,21 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
              inputs={"seed": (seed, "seed")},
              params={"frequency": cfg["island_frequency"], "gain": 0.5,
                      "lacunarity": 2.0, "numOctaves": 3}),
-        remap_map(name["island_raw"], ref("island_noise"),
+        # The Islands slider, which the river node hands over as a map in the
+        # same way as the coastline's roughness, bent into island sizes here.
+        node(name["island_raster"], "rasterizer_map",
+             inputs={"texCoords": (layout, "islandTexCoords"),
+                     "vertices": (layout, "islandVertices")},
+             params={"op": "Max", "tex": LAYOUT_TEX,
+                     "wrapS": "REPEAT", "wrapT": "REPEAT"}),
+        remap_map(name["island_param"], ref("island_raster"), 0, 1, 0, 1),
+        node(name["island_bias_steps"], "constant_pointcloud",
+             params={"values": cfg["island_bias"]}),
+        node(name["island_bias"], "pwlerp_map",
+             inputs={"in1": ref("island_param"), "steps": ref("island_bias_steps")}),
+        node(name["island_noisy"], "add_map",
+             inputs={"in1": ref("island_noise"), "in2": ref("island_bias")}),
+        remap_map(name["island_raw"], ref("island_noisy"),
                   cfg["island_threshold"], cfg["island_threshold"] + 0.04, 0, 1),
         remap_map(name["island_gate"], ref("u_coast"),
                   cfg["coast"] + cfg["island_offshore"],
@@ -777,17 +1058,6 @@ def splice_river_to_sea(tree, cfg=RIVER_TO_SEA):
             tree.rewire(consumer, input_name, cut, name["valley"])
 
 
-def write_gradient(path, width=256, height=8):
-    """A left-to-right 0..255 ramp as an 8-bit greyscale TGA - the format of
-    the stock stamps such as climates/gen/tex/volcano.tga."""
-    header = bytes([0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    width & 255, width >> 8, height & 255, height >> 8, 8, 8])
-    row = bytes(round(x * 255 / (width - 1)) for x in range(width))
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as f:
-        f.write(header + row * height)
-
-
 # --- validation ---------------------------------------------------------------
 
 def learn(stock, custom_layer_types):
@@ -808,6 +1078,11 @@ def learn(stock, custom_layer_types):
     for layer_type, custom in custom_layer_types.items():
         spec = CUSTOM_NODES[custom]
         inputs[layer_type].append(set(spec["inputs"]))
+        # A second observation without the optional inputs, so that what every
+        # use of the type has in common - which is how validate() tells a
+        # required input from an optional one in the stock types - comes out as
+        # the required ones alone.
+        inputs[layer_type].append(set(spec["inputs"]) - set(spec.get("optional", ())))
         params[layer_type].append(set(spec["params"]))
         out_keys[layer_type] |= spec["outputs"]
     return inputs, params, out_keys
@@ -895,6 +1170,55 @@ def validate(text, knowledge):
 
 # --- the .gen.lua ---------------------------------------------------------------
 
+# Params of our own, which every stock generator does without: the dialog
+# builds one UI element per param with no limit on the number
+# (gui/menu/new_game_react_util.tl, addTerrainParameterSettingsEntry), and
+# ComboBox is one of the five uiTypes it knows (api.type.enum.ScriptParamType).
+# Both of ours read as "leave it alone" at the value a generator that never got
+# them falls back on, so a dialog that turns out not to show a fourth and fifth
+# param costs only the choice.
+GEN_PARAM = """\t\t\t{
+\t\t\t\tdefaultIndex = %(default)d,
+\t\t\t\timages = { },
+\t\t\t\tkey = "%(key)s",
+\t\t\t\tname = _("%(name)s"),
+\t\t\t\ttags = { },
+\t\t\t\ttooltip = _("%(tooltip)s"),
+\t\t\t\tuiType = "%(ui)s",
+\t\t\t\tvalueIndices = { },
+\t\t\t\tvalues = {
+%(values)s
+\t\t\t\t},
+\t\t\t\tyearFrom = 0,
+\t\t\t\tyearTo = 0,
+\t\t\t},
+"""
+
+
+def gen_param(key, name, tooltip, ui, values, default):
+    return GEN_PARAM % dict(
+        key=key, name=name, tooltip=tooltip, ui=ui, default=default,
+        values="\n".join('\t\t\t\t\t_("%s"),' % v for v in values))
+
+
+def our_params():
+    """The params Mountains to delta adds, in the order the dialog shows them:
+    above the stock sliders, because they decide what those then adjust."""
+    return (
+        gen_param(LAYOUT_KEY, "Layout", "Where the mountains and the sea are.",
+                  "ComboBox", ["Random"] + [spec["name"] for spec in LAYOUTS], 1)
+        + gen_param(COAST_KEY, "Coastline",
+                    "How far the coastline wanders in and out of a straight line.",
+                    "Slider", [v[0] for v in COASTLINES], 3)
+        + gen_param(ISLANDS_KEY, "Islands",
+                    "How many islands lie off the coast.",
+                    "Slider", [v[0] for v in ISLANDS], 3)
+        + gen_param(AXIS_KEY, "Orientation",
+                    "Which side of the map the layout runs along. "
+                    "A square map looks the same either way.",
+                    "ComboBox", [v[0] for v in AXES], 2))
+
+
 HEADER = """-- %(display)s. GENERATED by tools/build.py - do not edit by hand.
 --
 -- The stock %(climate)s generator pointed at our own node tree: the stock graph
@@ -903,7 +1227,7 @@ HEADER = """-- %(display)s. GENERATED by tools/build.py - do not edit by hand.
 """
 
 
-def build_gen(stock, climate, tree_res, label, what):
+def build_gen(stock, climate, tree_res, label, what, layout_param_wanted=False):
     text = stock.gen(climate)
     for old, new in (
         ('nodeTree = "%s_gen.tree"' % climate, 'nodeTree = "%s"' % tree_res),
@@ -934,6 +1258,12 @@ def build_gen(stock, climate, tree_res, label, what):
                           count=1, flags=re.S)
     if not count:
         raise SystemExit("could not find the display name in the stock generator")
+    if layout_param_wanted:
+        anchor = "\t\tparams = {\n"
+        if text.count(anchor) != 1:
+            raise SystemExit("could not find the generator's param list")
+        text = text.replace(anchor, anchor + our_params(), 1)
+
     # After the stock entries, which are ordered 0..3.
     text, count = re.subn(r"order = \d+", "order = 90", text, count=1)
     if not count:
@@ -955,15 +1285,21 @@ RIVER_NODE = "mapzilla/river.node"
 # file base, once it has been selected in the game, is not free to rename or
 # remove: pick another generator in the dialog first.
 GENERATORS = (
-    # (file base, stock climate, splice, label, description for the header)
+    # (file base, stock climate, splice, label, description for the header,
+    #  whether the generator gets the Layout dropdown)
     # Shown as "Mountains to delta". The file base keeps its first name: it
     # is what settings.lua remembers, so it cannot follow the display name.
     ("mapzilla_temperate_river_sea", "temperate", splice_river_to_sea, "=Mountains to delta",
-     "one river laid out by our scripted node, mountains at its source and a sea at its mouth"),
-    ("mapzilla_river_a", "temperate", splice_river(RIVER_NODE), "River probe",
-     "the river layout taken from our scripted node"),
+     "one river laid out by our scripted node, with the mountains and the sea\n"
+     "-- placed around it in the layout the Layout dropdown asks for", True),
+    # The probe has none of the layout machinery - stock temperate terrain,
+    # only the river swapped - so it pins the river to the layout that assumes
+    # nothing: along the map, as it was before there were layouts.
+    ("mapzilla_river_a", "temperate", splice_river(RIVER_NODE, layout="shore"), "River probe",
+     "the river layout taken from our scripted node", False),
     ("mapzilla_temperate_mesas", "temperate", splice_mesas, "Mesas",
-     "the desert's mesas, confined to noise-picked regions, spliced into the height chain"),
+     "the desert's mesas, confined to noise-picked regions, spliced into the height chain",
+     False),
 )
 
 CUSTOM_LAYER_TYPES = {RIVER_NODE: "river"}
@@ -997,8 +1333,17 @@ def main():
     content_dir = os.path.abspath(args.content)
     out_dir = os.path.join(content_dir, "climates", "mapzilla")
 
+    # The river script's own copy of the layout table, which build.py cannot
+    # validate the way it validates a tree.
+    script = os.path.join(content_dir, "mapzilla", "nodes.script.lua")
+    drift = check_layouts(script)
+    if drift:
+        for problem in drift:
+            print("  -", problem)
+        return 1
+
     built = []
-    for base, climate, splice, label, what in GENERATORS:
+    for base, climate, splice, label, what, layout in GENERATORS:
         tree = Tree(stock.tree(climate))
         splice(tree)
         text = tree.render()
@@ -1008,7 +1353,7 @@ def main():
             for p in problems:
                 print("  -", p)
             return 1
-        display, gen = build_gen(stock, climate, base + ".tree", label, what)
+        display, gen = build_gen(stock, climate, base + ".tree", label, what, layout)
         built.append((base, display, len(tree.nodes), len(tree.added), text, gen))
 
     # Everything in the output folder is generated, so stale generators from an
@@ -1021,7 +1366,14 @@ def main():
         write(os.path.join(out_dir, base + ".gen.lua"), gen)
         print("%-28s %d stock nodes + %d of ours, validated" % (display, stock_nodes, added))
     print("written to " + out_dir)
-    write_gradient(os.path.join(content_dir, "mapzilla", "tex", "gradient.tga"))
+    tex = os.path.join(content_dir, "mapzilla", "tex")
+    write_layout_atlas(os.path.join(tex, "layouts.tga"))
+    print("%d layouts baked into tex/layouts.tga: %s"
+          % (len(LAYOUTS), ", ".join(spec["key"] for spec in LAYOUTS)))
+    # gradient.tga was the single left-to-right ramp the atlas replaced.
+    stale = os.path.join(tex, "gradient.tga")
+    if os.path.exists(stale):
+        os.remove(stale)
     print("%d files listed in _content.json" % write_content_list(content_dir))
     return 0
 

@@ -9,6 +9,6 @@
         "climates/mapzilla/mapzilla_temperate_river_sea.tree.lua",
         "mapzilla/nodes.script.lua",
         "mapzilla/river.node.lua",
-        "mapzilla/tex/gradient.tga"
+        "mapzilla/tex/layouts.tga"
     ]
 }

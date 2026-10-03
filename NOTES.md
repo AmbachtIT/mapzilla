@@ -25,6 +25,23 @@ A mod can supply its own **scripted node** - see below. The river probe
 replaces the temperate river layout with one from
 `content/mapzilla/nodes.script.lua`.
 
+Confirmed in the game: the **layouts** below and the **Layout dropdown** that
+chooses between them. A fourth generator param does appear in the new game
+dialog, a ComboBox renders, and the key reaches the tree - so a param's value
+really is `(index - 1) / (count - 1)`.
+
+Not yet seen in the game: **several river systems per map**, the **Coastline**,
+**Islands** and **Orientation** params, and the constant-map trick two of them
+rest on.
+
+Seen in the game and worth recording: with the island noise taken out of the
+picture entirely, a map still has a few islands. They are the coastline's
+doing, not the island stamp's - a threshold on a noisy field stranded pieces of
+the shelf offshore - so the setting that does it is called Few and not None.
+Coastline at Straight is what makes a sea empty. Checked as far as they can be
+without starting it - every layout, at both ends of both params, on three map
+shapes, drawn by `tools/preview_river.py`.
+
 ## Scripted nodes
 
 The `gui/node_editor/*.node` layer types are not engine code. Each is a
@@ -203,6 +220,159 @@ Built, checked offline, not yet seen in the game:
   above the threshold it gives the distance to the nearest pixel at or below
   it; pixels at or below get 0. Stock feeds it inverted masks for that reason.
 
+## Layouts
+
+Where the mountains and the sea are. The river-to-sea splice hangs the
+coastline, the relief, the lakes and the islands off one field u - 0 deep in
+the mountains, 1 out at sea - so a different u is a different map, and nothing
+downstream has to know. Seven of them, in `LAYOUTS` in `tools/build.py`:
+single shore, island, inland sea, isthmus, strait, peninsula, bay.
+
+- **One field, two readers.** A layout is a distance measured in the map frame
+  (`a` along the map's longer side, `b` across) and the two distances at which
+  u is 0 and 1. `build.py` bakes the field from them; the script lays the
+  river out in the frame they describe, from u 0.05 to 1.03 along the map's
+  centre line, where the field is linear in u by construction. They are two
+  tables in two languages, so `check_layouts` reads the script's back and
+  refuses to build if they have drifted apart, and `preview_river.py` checks
+  the result the other way round: it reads u off the field at the trunk's two
+  ends and says so if the mouth is not at sea or the source not in the
+  highland.
+- **A distance may end off the map.** That is what gives a layout a broad band
+  of mountains along an edge rather than a thin rim: the map edge then lies
+  partway up the ramp instead of at its end. The river's upper reach goes off
+  the map with it, which is no odder than the mouth, which has always run a
+  little past the edge.
+- **One texture, seven tiles.** The layout is picked per map, by the seed or
+  by the dropdown, so it cannot be a texture named in the tree. It is an
+  atlas instead - `tex/layouts.tga`, the tiles side by side - and the script
+  points the layout quad's texture coordinates at the tile it chose. The quad
+  already overhangs the map by `LAYOUT_MARGIN`, so each tile is baked with the
+  overhang in it and the map lands in the middle of its tile, clear of the
+  filtering at the edges. One row of tiles, not a grid: how `random_quads`
+  turns an atlas index into a column offset is plain, but which way up the
+  rows are read is not, and every field is symmetrical across the map's centre
+  line anyway.
+- **Radial layouts are a wedge, not a strip.** A step sideways near the centre
+  of the map covers far less ground than the same step at the coast, so
+  lateral offsets are scaled by the distance from the centre - but never below
+  a third, or a stream near the centre comes out as a straight radial line
+  with its meanders pressed flat. The river is still planned on a plain
+  rectangle; only the last step onto the map knows.
+- **Several river systems.** The Rivers slider sets how many, from one to
+  five on a 16km map and more on a wider one, as well as how densely their
+  tributaries join. Each gets a lane of its own across the map and keeps its
+  trunk, its wander and its delta inside it, so they never braid. Two things
+  follow from lanes: a narrow lane makes for shorter tributaries, so the
+  minimum length comes down with it (`MIN_POINTS_NARROW`) or there would be
+  none at all; and the lanes only span `band`, the share of the map across the
+  rivers that the layout leaves them - on a peninsula the flanks are sea all
+  the way down, and a river laid out there would start in the water.
+- **Lanes on a radial layout are counted per side.** Two systems draining
+  opposite sides of an island are already as far apart as the map can put
+  them; lanes on top of that drag their sources off the summit and their
+  mouths away from the middle, which on a radial layout are the one point the
+  whole thing turns around. A fold's two sides lie along the length of the
+  map, where there is room to spread, so those keep their lanes. Before this,
+  a two-river island put both sources in the hills.
+- **Orientation.** Which of the map's two sides the layout runs along - the
+  one the land changes down. The long side is what every map did before the
+  param; the short side turns the whole thing a quarter turn, which on an
+  isthmus or a strait is the difference between a range down the length of the
+  map and one across it. A square map looks the same either way.
+- **A fold drains both ways.** Isthmus and strait put the same land on both
+  sides of the map's centre line, and successive systems take the two sides in
+  turn - so a strait is drained from both of its shores and an island on both
+  of its flanks. This is why rivers are kept apart in map metres and not in the
+  frame: two systems on opposite sides of a fold share a (U, V) and are half a
+  map apart, and near the centre of a radial layout the frame is squeezed.
+- **Corners.** Peninsula and bay need a second term for their flanks. Combined
+  with a plain max or min it gives the map square corners; taken in quadrature
+  it rounds them off, and still leaves the centre line exactly u, which is the
+  only place the field and the river's frame have to agree.
+- **Confluences.** A folded or radial layout gives the river under half the
+  map to run down, and confluences counted in metres leave it nearly bare. The
+  spacing is pulled in by the square root of what the river lost - the land it
+  drains does not shrink with it. A layout running the length of the map
+  scales by exactly 1, so the generator that existed before layouts is
+  untouched.
+
+### The Coastline param, and a number as a map
+
+The coastline is a threshold on u plus a noise, so how far it wanders is the
+amplitude of that noise. Nothing in the graph multiplies a map by a number
+that a slider can reach: the scalar inputs stock wires are thresholds,
+frequencies and kernel sizes (`distance_map.threshold`, `ridged_noise_map`'s
+`baseFreq`, `blur_map.sigma`), and `constant_map` takes its value from a param.
+
+So the number is carried across as a picture, the way the layout is:
+
+- The script emits a second quad over the whole map, every corner of it
+  pointing at **one single texel**, so rasterising it fills the map with that
+  one value. `mul_map` then scales the coast noise by it.
+- The texel is a point on the first tile of the atlas, which is the plain ramp
+  of the "shore" layout - its value is the map coordinate it stands for. So
+  asking it for a number is reading that ramp backwards, and `build.py` asserts
+  the first tile stays plain. `preview_river.py` decodes the texture coordinate
+  the script sent and prints the amplitude back, which is what checks the two
+  ends of the trick against each other.
+- Any number a script works out can reach the map side of the graph this way,
+  and so can a param that only the script is handed. The Islands slider goes
+  across untouched - the script is a pipe - and a `pwlerp_map` on the far side
+  bends it into island sizes, which is how five slider steps get a curve rather
+  than a straight line. Being a curve is what lets its first setting push the
+  noise clean out of the threshold's reach, so "None" really is none, while its
+  middle setting still leaves the islands the mod has always had.
+- The alternative, for a threshold like the islands' one, is the stock pattern:
+  `param_number -> remap_number -> split_interval.percentage -> mask_map`,
+  which is how the Mountains slider moves the biome splits. It was not used
+  here for two reasons: `mask_map` is a hard in-or-out test, which would cost
+  the islands the soft edge the threshold ramp gives their outlines, and the
+  chain is linear end to end, so it could not have both a true "None" and the
+  old behaviour in the middle.
+
+Two things bound the amplitude, both in `nodes.script.lua`:
+
+- u stops at 1, so beyond the end of the frame - the corners of a radial
+  layout, the last of the map on any other - the whole sea reads exactly 1. A
+  wobble of `1 - COAST` or more would turn that outermost water back into land
+  wherever the noise dipped, so `ROUGHNESS_MAX` stays well under it.
+- The wobble is two octaves, and the second one takes a share of it rather
+  than adding to it, so the pair never reach further than the ceiling and the
+  guarantee above still holds. The share is read off how far the coast wanders
+  at all - the one number in the graph that follows the Coastline setting -
+  through a `pwlerp_map`: nothing at Straight, two fifths at Wild. What the
+  setting changes is therefore the character of the coast as much as its
+  reach, which is what "rugged" has to mean once the reach has a ceiling.
+- A layout that folds the map puts the whole of u into half its width, so the
+  same distance on the ground is a much larger slice of u. The amplitude is
+  therefore scaled by how much of the map the frame covers, which is what makes
+  one setting mean the same number of metres on every layout - the folded ones
+  being exactly the ones whose coastlines looked ruled. On those the top two
+  settings meet the ceiling together.
+
+### The Layout dropdown
+
+A fourth generator param, which no stock generator has. From the dialog's own
+Teal, not from a running game:
+
+- `new_game_react_util.tl`, `addTerrainParameterSettingsEntry` builds one UI
+  element per entry of `generatorDesc.params`, with no limit on the number.
+- `uiType` is one of five (`api.type.enum.ScriptParamType`): Button, Slider,
+  ComboBox, IconButton, CheckBox. Stock generators only ever use Slider.
+- `param_number` reads a param by key and gives a number in 0..1 - every stock
+  tree reads one through a `remap_number` whose input range is 0..1. The value
+  looks to be `(index - 1) / (count - 1)`: the dummy a node falls back on is
+  0.5 wherever the slider's default is the middle of five values. **Inferred,
+  not confirmed** - if it is wrong the dropdown will be off by one, and the
+  log line names the layout the script actually chose.
+- An unwired optional input takes its value from the node's param of the same
+  name. Stock relies on this: no `random_quads` anywhere wires `atlasSize`,
+  and `layer_nodes.script.tl` reads `inputs.atlasSize.point` regardless.
+- Index 1 is "Random", and 0 is also what `param_number` falls back on where
+  the key is not set. So a generator that never got the param, or a dialog
+  that turns out not to show a fourth one, still gets a layout from the seed.
+
 ## Files that make up a generator
 
 Per climate, in `climates/<climate>/`:
@@ -287,6 +457,8 @@ is really the "high plateau" of its biome 3, not a field of separate mesas.
 ## Open questions
 
 1. How long does a 346-node tree take in the new game dialog's preview?
-2. Will the dialog show a fourth slider? Every stock generator declares exactly
-   three, though the trees also read a `forest` key no slider declares.
-3. Can two `river_map` nodes coexist in one tree?
+2. How many params will the dialog show? Four is confirmed; five is not.
+3. How much does a map of five river systems cost to generate? Rivers are kept
+   apart by a scan over every point claimed so far, which grows with the square
+   of the number of them.
+4. Can two `river_map` nodes coexist in one tree?

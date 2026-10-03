@@ -15,11 +15,16 @@ under `mod/mapzilla_1/content/climates/mapzilla/`. Those files are generated -
 change `build.py`, not them.
 
 The goal is varied, realistic maps - for example a river that runs from the
-mountains to the sea and ends in a delta. Two levers have been found:
+mountains to the sea and ends in a delta. Three levers have been found:
 
 - **Regional gates.** A feature stamped only where a low-frequency noise field
   allows it, so one side of the map differs from the other. Proven in the game
   with the desert's mesas on a temperate map (`splice_mesas`, no longer built).
+- **A field the whole graph reads.** "Mountains to delta" puts everything -
+  coastline, relief, lakes, islands - on one number: how far a place is from
+  the mountains, towards the sea. The script paints that field by pointing a
+  quad at one tile of `tex/layouts.tga`, so changing the shape of a map is
+  changing one picture (`LAYOUTS` in `tools/build.py`).
 - **Scripted nodes.** Some node types, the river layout among them, are Lua
   scripts rather than engine code. `content/mapzilla/` holds our own: a
   `.node.lua` definition plus `nodes.script.lua`. Proven in the game.
@@ -30,7 +35,7 @@ Generators currently built:
 
 | generator | base | changes |
 |---|---|---|
-| Mountains to delta | temperate | a river tree laid out by our scripted node - trunk, tributaries and their tributaries, widening downstream with discharge - running from highland at one end of the map through rolling hills to flat plains, a delta and a sea at the other |
+| Mountains to delta | temperate | a river tree laid out by our scripted node - trunk, tributaries and their tributaries, widening downstream with discharge - running from highland through rolling hills to flat plains, a delta and the sea, in one of seven layouts: single shore, island, inland sea, isthmus, strait, peninsula, bay |
 | Temperate + River probe | temperate | river layout from our scripted node: one river across the map that splits into a delta |
 | Temperate + Mesas | temperate | the desert's mesas inside noise-picked regions. Kept as a worked example, not as a feature |
 
@@ -43,12 +48,38 @@ None in `mod.json`. Each generator keeps the stock sliders of its base climate
 sets how densely tributaries join and the Lakes slider how many lakes lie along
 the rivers.
 
+That generator adds two params of its own, above the stock sliders. No stock
+generator declares more than three, or anything but a slider, so both are
+Mapzilla's own reading of the dialog's Teal:
+
+- **Layout** (`mz_layout`), a dropdown: where the mountains and the sea are,
+  with "Random" - the default - leaving it to the map seed. Confirmed working
+  in the game.
+- **Coastline** (`mz_coast`), a slider from Straight to Wild: how far the
+  coastline wanders in and out of the line the layout would otherwise draw.
+  The middle setting is what every map had before the param existed.
+- **Islands** (`mz_islands`), a slider from Few to Packed: how many islands
+  lie off the coast. The middle setting is again the old behaviour. The first
+  takes the island noise out of the picture altogether, but a coastline rough
+  enough to wander still strands the odd piece of shelf offshore, which is why
+  it is not called None.
+- **Orientation** (`mz_axis`), a dropdown: which side of the map the layout
+  runs along, the long one (the default, and what every map did before) or the
+  short one. Nothing to choose on a square map.
+
+Either falls back to its middle on a dialog that will not show it. The Rivers
+slider now also sets how many separate river systems a map gets, from one to
+five on a 16km map, as well as how densely their tributaries join.
+
+See Layouts in NOTES.md.
+
 ## Layout
 
 ```
 mod/mapzilla_1/      the publishable mod (deploy.ps1 installs this)
   content/climates/mapzilla/   generated generators - do not edit by hand
   content/mapzilla/            our scripted nodes, written by hand
+  content/mapzilla/tex/        generated: layouts.tga, one tile per layout
   _content.json                generated: lists everything under content/
 tools/build.py       builds and validates the generators from the stock trees
 tools/run_river.js   runs the river node's Lua outside the game (Node + fengari)
@@ -69,10 +100,14 @@ npm install --no-save fengari
 python tools/preview_river.py --out preview.png
 ```
 
-That executes `content/mapzilla/nodes.script.lua` for six seeds and draws the
-river trees. It catches Lua errors and bad layouts; it does not show terrain,
-which only the game can. fengari is Lua 5.3 and the game's Lua is older, so
-keep the script to plain 5.1.
+That executes `content/mapzilla/nodes.script.lua` for six seeds and draws each
+one: the layout shaded the way the node graph will read it, with the rivers on
+top. `--layout island` (or any key from `LAYOUTS`) draws one layout instead of
+leaving it to the seed. It catches Lua errors, a river laid out in a frame its
+layout does not match - it checks that every mouth ends at sea and every source
+in the highland - and bad layouts; it does not show terrain, which only the
+game can. fengari is Lua 5.3 and the game's Lua is older, so keep the script to
+plain 5.1.
 
 ## Conventions
 
