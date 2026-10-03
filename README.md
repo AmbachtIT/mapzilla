@@ -2,7 +2,7 @@
 
 A mod for **Transport Fever 3**. The stock map generator only exposes a few parameters per biome. This mod exposes more so you can create more varied maps.
 
-![Mapzilla](mod/mapzilla/_metadata/0.png)
+![Mapzilla](mod/mapzilla_1/_metadata/0.png)
 
 ### The listing image
 
