@@ -292,8 +292,8 @@ $scrim = New-Object System.Drawing.Drawing2D.LinearGradientBrush $scrimRect, (Ne
 $scrim.WrapMode = [System.Drawing.Drawing2D.WrapMode]::TileFlipXY
 $gfx.FillRectangle($scrim, 0, 0, $W, 360)
 
-# The title carries the image on its own - no eyebrow, no subtitle - so it is
-# sized to use the room that leaves.
+# The title, with "Map generator" under the rule to say what the mod is. Sized
+# so the two of them together still sit inside the scrim.
 $titleFont = New-Object System.Drawing.Font "Segoe UI", 132, ([System.Drawing.FontStyle]::Bold), ([System.Drawing.GraphicsUnit]::Pixel)
 $inkBrush = New-Object System.Drawing.SolidBrush $Ink
 
@@ -308,6 +308,11 @@ $titleSize = $gfx.MeasureString($titleText, $titleFont)
 $rulePen = New-Object System.Drawing.Pen $Accent, 8
 $ruleY = $titleY + $titleSize.Height - 18
 $gfx.DrawLine($rulePen, [float]($titleX + 8), [float]$ruleY, [float]($titleX + 8 + 260), [float]$ruleY)
+
+# Subtitle, hung off the rule rather than placed by hand for the same reason.
+$subFont = New-Object System.Drawing.Font "Segoe UI", 46, ([System.Drawing.FontStyle]::Regular), ([System.Drawing.GraphicsUnit]::Pixel)
+$subBrush = New-Object System.Drawing.SolidBrush (New-Colour "F6F3EC" 225)
+$gfx.DrawString("Map generator", $subFont, $subBrush, [float]($titleX + 4), [float]($ruleY + 14))
 
 Write-Host ("  title {0:N0} x {1:N0} px, ends at x={2:N0}" -f $titleSize.Width, $titleSize.Height, ($titleX + $titleSize.Width))
 

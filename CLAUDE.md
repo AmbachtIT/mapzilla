@@ -79,9 +79,12 @@ Mapzilla's own reading of the dialog's Teal:
   takes the island noise out of the picture altogether, but a coastline rough
   enough to wander still strands the odd piece of shelf offshore, which is why
   it is not called None.
-- **Orientation** (`mz_axis`), a dropdown: which side of the map the layout
-  runs along, the long one (the default, and what every map did before) or the
-  short one. Nothing to choose on a square map.
+- **Orientation** (`mz_axis`), a dropdown: which way round the layout sits -
+  Default, what every map did before, or Alternate, a quarter turn from it.
+  Nothing to choose on a square map. The settings name no side of the map on
+  purpose: the script's `axis` is the side the land changes down, which is the
+  map's length on a shore layout and its width on an isthmus, so a label
+  naming a side reads backwards on half the layouts.
 
 Either falls back to its middle on a dialog that will not show it. The Rivers
 slider now also sets how many separate river systems a map gets, from one to

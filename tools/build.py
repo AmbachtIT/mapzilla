@@ -525,11 +525,15 @@ COASTLINES = (("Straight",), ("Gentle",), ("Medium",), ("Rugged",), ("Wild",))
 # not None because a coastline rough enough to wander will still strand the
 # odd piece of shelf offshore, and that is the coast's doing, not this.
 ISLANDS = (("Few",), ("Scattered",), ("Medium",), ("Dense",), ("Packed",))
-# The Orientation dropdown: which side of the map a layout runs along. Index 1
-# is Random, so 0 - what a param_number falls back on where the key is unset -
-# would be Random too; the dummy is the long side instead, which is what every
-# map did before the param existed.
-AXES = (("Random",), ("Long side",), ("Short side",))
+# The Orientation dropdown: which way round a layout sits. The two settings
+# name no side of the map, because no one pair of names fits all seven layouts
+# - the land changes down the map's length on a shore and across it on an
+# isthmus, so whichever side a label picked out would read backwards on some
+# of them. Default is the quarter turn every map had before the param, and
+# Alternate the other one. Index 1 is Random, so 0 - what a param_number falls
+# back on where the key is unset - would be Random too; the dummy is index 2
+# instead, which is Default.
+AXES = (("Random",), ("Default",), ("Alternate",))
 LAYOUT_TEX = "mapzilla_1::/mapzilla/tex/layouts.tga"
 LAYOUT_TILE = 256                      # pixels per layout in the atlas
 
@@ -1341,8 +1345,8 @@ def our_params():
                     "How many islands lie off the coast.",
                     "Slider", [v[0] for v in ISLANDS], 3)
         + gen_param(AXIS_KEY, "Orientation",
-                    "Which side of the map the layout runs along. "
-                    "A square map looks the same either way.",
+                    "Which way round the layout sits: Alternate turns it a "
+                    "quarter turn. A square map looks the same either way.",
                     "ComboBox", [v[0] for v in AXES], 2))
 
 

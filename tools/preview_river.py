@@ -190,8 +190,9 @@ def main():
     parser.add_argument("--islands", type=float, default=0.5,
                         help="Islands param, 0..1 in five steps (0 = none)")
     parser.add_argument("--axis", type=float, default=0.5,
-                        help="Orientation param: 0 random, 0.5 the map's long "
-                             "side, 1 its short side")
+                        help="Orientation param: 0 random, 0.5 Default (the "
+                             "land changes down the map's long side), 1 "
+                             "Alternate, a quarter turn from it")
     parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3, 4, 5, 6])
     parser.add_argument("--out", default="preview.png")
     args = parser.parse_args()

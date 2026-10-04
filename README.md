@@ -32,8 +32,8 @@ Two more settings sit with it in the new game dialog:
   layout would otherwise draw.
 - **Islands**, from Few to Packed: how many islands lie off the coast. A rough coastline
   strands a few of its own whatever this says, so an empty sea wants Coastline on Straight too.
-- **Orientation**: whether the layout runs along the map's long side or its short one. A square
-  map looks the same either way.
+- **Orientation**: Default, or Alternate for a quarter turn - which way round the layout sits
+  on the map. A square map looks the same either way.
 - **Rivers**, the stock slider, now sets how many separate river systems the map gets - one to
   five on a 16km map - as well as how densely their tributaries join.
 

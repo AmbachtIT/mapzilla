@@ -421,11 +421,14 @@ local function riverApplyFn(params, inputs, captureParams)
 			1, #ROUGHNESS)]
 	end
 
-	-- The Orientation param: which of the map's two sides the layout runs
-	-- along - the one the land changes down, so the one a shore layout's river
-	-- runs the length of and an isthmus's range lies across. 1 is random, 2
-	-- the long side, which is what every map did before the param, and 3 the
-	-- short side. On a square map there is nothing to choose.
+	-- The Orientation param: which way round a layout sits. `axis` picks the
+	-- side the land changes down - the one a shore layout's river runs the
+	-- length of. 2 is the map's long side, which is what every map did before
+	-- the param and what the dialog calls Default; 3 is its short side, the
+	-- dialog's Alternate. The dialog names neither side, because the land
+	-- changes down the map's length on a shore and across it on an isthmus, so
+	-- a label naming a side would read backwards on half the layouts. 1 is
+	-- random, and on a square map there is nothing to choose.
 	local axis = 2
 	if inputs.axis and inputs.axis.value then
 		axis = clamp(math.floor(inputs.axis.value * 2 + 1.5), 1, 3)

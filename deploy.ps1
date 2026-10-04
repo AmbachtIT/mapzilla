@@ -13,6 +13,10 @@ Two destinations, and the difference matters:
                  only ever looks here, so a mod that lives in mods\ cannot be
                  uploaded.
 
+A deploy to staging_area\ keeps that folder's _metadata\mod.io_fileid.txt,
+which is the game's record of the mod.io entry this mod belongs to. Lose it and
+the next publish creates a new entry rather than updating the published one.
+
 .PARAMETER Staging
 Deploy to staging_area\ instead of mods\, ready to publish.
 
@@ -64,8 +68,24 @@ if (-not (Test-Path $TargetRoot)) {
 }
 
 $Target = Join-Path $TargetRoot $ModId
+
+# When the mod manager publishes, the game writes the mod.io entry's id into
+# _metadata\mod.io_fileid.txt inside the staging folder. That file is the only
+# record of which entry this mod is - it is not in the repo, and nothing else
+# on disk holds it - and the next publish reads it to know what to update. A
+# deploy that wipes the folder therefore costs the mod its identity: the game
+# finds no id, and publishes a second, empty mod.io entry beside the live one
+# instead of updating it. So it is carried across the wipe.
+$IdFile = Join-Path $Target "_metadata\mod.io_fileid.txt"
+$KeptId = if (Test-Path $IdFile) { Get-Content -Raw $IdFile } else { $null }
+
 if (Test-Path $Target) { Remove-Item -Recurse -Force $Target -Confirm:$false }
 Copy-Item -Recurse $Source $Target
+
+if ($KeptId) {
+	Set-Content -Path $IdFile -Value $KeptId -NoNewline -Encoding ascii
+	Write-Host "Kept mod.io id $($KeptId.Trim())"
+}
 
 Write-Host "Deployed to $Target"
 Write-Host "Log: $(Join-Path $Local.FullName 'crash_dump\stdout.txt')"

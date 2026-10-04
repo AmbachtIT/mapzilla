@@ -330,11 +330,15 @@ single shore, island, inland sea, isthmus, strait, peninsula, bay.
   whole thing turns around. A fold's two sides lie along the length of the
   map, where there is room to spread, so those keep their lanes. Before this,
   a two-river island put both sources in the hills.
-- **Orientation.** Which of the map's two sides the layout runs along - the
-  one the land changes down. The long side is what every map did before the
-  param; the short side turns the whole thing a quarter turn, which on an
-  isthmus or a strait is the difference between a range down the length of the
-  map and one across it. A square map looks the same either way.
+- **Orientation.** Which way round a layout sits. The script works in the side
+  the land changes down - `axis` 2, the map's long side, is what every map did
+  before the param - and the other setting turns the whole thing a quarter
+  turn, which on an isthmus or a strait is the difference between a range down
+  the length of the map and one across it. The dialog calls the two Default and
+  Alternate rather than naming a side, because the side the land changes down
+  is the map's length on a shore, peninsula or bay and its width on an isthmus
+  or a strait: any label naming a side is right for some layouts and backwards
+  for the others. A square map looks the same either way.
 - **A fold drains both ways.** Isthmus and strait put the same land on both
   sides of the map's centre line, and successive systems take the two sides in
   turn - so a strait is drained from both of its shores and an island on both
